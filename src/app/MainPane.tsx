@@ -8,7 +8,7 @@ export function MainPane() {
 
   if (!activeTab) {
     return (
-      <div className="flex flex-1 items-center justify-center text-neutral-500">
+      <div className="flex flex-1 items-center justify-center text-adaka-faint">
         <p className="select-none text-sm">No tabs open</p>
       </div>
     );
@@ -19,7 +19,7 @@ export function MainPane() {
 
   if (!route) {
     return (
-      <div className="flex flex-1 items-center justify-center text-neutral-500">
+      <div className="flex flex-1 items-center justify-center text-adaka-faint">
         <p className="select-none text-sm">Route not found</p>
       </div>
     );

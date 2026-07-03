@@ -17,4 +17,9 @@ export type {
   ToastKind,
   WorkspaceInfo,
 } from "./types";
-export { registerModule, getModules } from "./registry";
+export {
+  registerModule,
+  getModules,
+  setOpenTabHandler,
+  requestOpenTab,
+} from "./registry";

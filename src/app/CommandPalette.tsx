@@ -13,6 +13,33 @@ function fuzzyMatch(query: string, text: string): boolean {
   return qi === q.length;
 }
 
+function highlightFuzzy(query: string, text: string): React.ReactNode {
+  if (!query) return text;
+  const q = query.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let qi = 0;
+  let run = "";
+  for (let ti = 0; ti < text.length; ti++) {
+    const ch = text[ti];
+    if (qi < q.length && ch != null && ch.toLowerCase() === q[qi]) {
+      if (run) {
+        parts.push(run);
+        run = "";
+      }
+      parts.push(
+        <span key={ti} className="text-adaka-gold">
+          {ch}
+        </span>,
+      );
+      qi++;
+    } else {
+      run += ch ?? "";
+    }
+  }
+  if (run) parts.push(run);
+  return parts;
+}
+
 function builtinCommands(): PaletteCommand[] {
   const store = useShellStore.getState();
   const cmds: PaletteCommand[] = [
@@ -117,12 +144,12 @@ export function CommandPalette() {
       onClick={() => setPaletteOpen(false)}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+        className="w-full max-w-md overflow-hidden rounded-lg border border-adaka-border-strong bg-adaka-chrome shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <input
           ref={inputRef}
-          className="w-full border-b border-neutral-700 bg-transparent px-4 py-3 text-sm text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="w-full border-b border-adaka-border bg-transparent px-4 py-3 text-sm text-adaka-text outline-none placeholder:text-adaka-faint"
           placeholder="Type a command…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -130,20 +157,20 @@ export function CommandPalette() {
         />
         <div className="max-h-64 overflow-y-auto py-1">
           {filtered.length === 0 && (
-            <p className="px-4 py-3 text-sm text-neutral-500">No results</p>
+            <p className="px-4 py-3 text-sm text-adaka-faint">No results</p>
           )}
           {filtered.map((cmd, i) => (
             <button
               key={cmd.id}
               className={`flex w-full items-center px-4 py-2 text-left text-sm ${
                 i === selectedIdx
-                  ? "bg-indigo-600 text-white"
-                  : "text-neutral-300 hover:bg-neutral-800"
+                  ? "bg-adaka-gold text-adaka-on-gold"
+                  : "text-adaka-text hover:bg-adaka-border"
               }`}
               onMouseEnter={() => setSelectedIdx(i)}
               onClick={() => run(cmd)}
             >
-              {cmd.label}
+              {highlightFuzzy(i === selectedIdx ? "" : query, cmd.label)}
             </button>
           ))}
         </div>

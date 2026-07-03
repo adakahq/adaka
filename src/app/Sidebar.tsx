@@ -7,42 +7,56 @@ export function Sidebar() {
   const theme = useShellStore((s) => s.theme);
   const setTheme = useShellStore((s) => s.setTheme);
   const openTab = useShellStore((s) => s.openTab);
+  const activeTabId = useShellStore((s) => s.activeTabId);
+  const tabs = useShellStore((s) => s.tabs);
   const modules = getModules();
 
+  const activeModuleId = tabs.find((t) => t.id === activeTabId)?.moduleId;
+
   return (
-    <div className="flex h-full w-12 flex-col items-center border-r border-neutral-700 bg-neutral-900 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+    <div className="flex h-full w-12 flex-col items-center border-r border-adaka-border bg-adaka-chrome py-2">
       {workspace && (
-        <div className="mb-2 flex h-8 w-8 items-center justify-center rounded bg-indigo-600 text-xs font-bold text-white select-none" title={workspace.name}>
+        <div
+          className="mb-2 flex h-8 w-8 items-center justify-center rounded bg-adaka-gold text-xs font-bold text-adaka-on-gold select-none"
+          title={workspace.name}
+        >
           {workspace.name.charAt(0).toUpperCase()}
         </div>
       )}
 
       <div className="flex flex-1 flex-col items-center gap-1 pt-1">
-        {modules.map((mod) => (
-          <button
-            key={mod.id}
-            className="flex h-8 w-8 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 hover:text-white"
-            title={mod.name}
-            onClick={() => {
-              const route = mod.routes[0];
-              if (route) {
-                openTab({
-                  id: `${mod.id}:${route.path}`,
-                  label: route.label,
-                  moduleId: mod.id,
-                  routePath: route.path,
-                });
-              }
-            }}
-          >
-            <ModuleIcon name={mod.icon} />
-          </button>
-        ))}
+        {modules.map((mod) => {
+          const isActive = mod.id === activeModuleId;
+          return (
+            <button
+              key={mod.id}
+              className={`flex h-8 w-8 items-center justify-center rounded ${
+                isActive
+                  ? "text-adaka-gold"
+                  : "text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
+              }`}
+              title={mod.name}
+              onClick={() => {
+                const route = mod.routes[0];
+                if (route) {
+                  openTab({
+                    id: `${mod.id}:${route.path}`,
+                    label: route.label,
+                    moduleId: mod.id,
+                    routePath: route.path,
+                  });
+                }
+              }}
+            >
+              <ModuleIcon name={mod.icon} />
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex flex-col items-center gap-1">
         <button
-          className="flex h-8 w-8 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
@@ -57,7 +71,7 @@ export function Sidebar() {
           )}
         </button>
         <button
-          className="flex h-8 w-8 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
           title="Settings"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">

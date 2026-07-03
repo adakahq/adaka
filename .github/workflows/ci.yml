@@ -65,6 +65,9 @@ jobs:
       - name: TypeScript check
         run: pnpm typecheck
 
+      - name: Vitest
+        run: pnpm test
+
       - name: Rust format check
         working-directory: src-tauri
         run: cargo fmt --check

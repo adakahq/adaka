@@ -1,6 +1,18 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { setOpenTabHandler } from "../shared/module-sdk";
 import { useShellStore } from "./store";
+
+import "../modules/utilities";
+
+setOpenTabHandler((moduleId, routePath, label) => {
+  useShellStore.getState().openTab({
+    id: `${moduleId}:${routePath}`,
+    label,
+    moduleId,
+    routePath,
+  });
+});
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { MainPane } from "./MainPane";
@@ -14,6 +26,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
 
+// TODO: light theme is a later milestone. Both values render dark for now.
 function ThemeSync() {
   const theme = useShellStore((s) => s.theme);
   const setTheme = useShellStore((s) => s.setTheme);
@@ -60,7 +73,7 @@ function Shell() {
 
   if (!workspace) {
     return (
-      <div className="flex h-full bg-neutral-950 text-neutral-100">
+      <div className="flex h-full bg-adaka-bg text-adaka-text">
         <Sidebar />
         <div className="flex flex-1 flex-col">
           <WelcomeScreen />
@@ -72,7 +85,7 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full bg-neutral-950 text-neutral-100">
+    <div className="flex h-full bg-adaka-bg text-adaka-text">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TabBar />
