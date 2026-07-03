@@ -16,6 +16,13 @@ export interface Toast {
   kind: ToastKind;
 }
 
+export interface ConfirmPanel {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+}
+
 let toastSeq = 0;
 
 interface ShellState {
@@ -27,6 +34,7 @@ interface ShellState {
   paletteOpen: boolean;
   toasts: Toast[];
   moduleContexts: Map<string, ModuleContext>;
+  confirm: ConfirmPanel | null;
 
   setWorkspace: (ws: WorkspaceInfo | null) => void;
   setTheme: (t: Theme) => void;
@@ -38,6 +46,8 @@ interface ShellState {
   addToast: (msg: string, kind?: ToastKind) => void;
   removeToast: (id: number) => void;
   setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
+  showConfirm: (panel: ConfirmPanel) => void;
+  dismissConfirm: () => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
@@ -49,6 +59,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   paletteOpen: false,
   toasts: [],
   moduleContexts: new Map(),
+  confirm: null,
 
   setWorkspace: (ws) => set({ workspace: ws }),
   setTheme: (t) => set({ theme: t }),
@@ -88,4 +99,6 @@ export const useShellStore = create<ShellState>((set, get) => ({
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
+  showConfirm: (panel) => set({ confirm: panel }),
+  dismissConfirm: () => set({ confirm: null }),
 }));

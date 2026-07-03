@@ -69,16 +69,7 @@ function builtinCommands(): ResolvedCommand[] {
       ctx: null,
       moduleId: null,
     },
-    {
-      cmd: {
-        id: "builtin:toggle-theme",
-        label: `Switch to ${store.theme === "dark" ? "light" : "dark"} mode`,
-        keywords: ["theme", "dark", "light"],
-        action: () => store.setTheme(store.theme === "dark" ? "light" : "dark"),
-      },
-      ctx: null,
-      moduleId: null,
-    },
+    // TODO(light-theme): restore theme toggle command
   ];
 
   for (const tab of store.tabs) {

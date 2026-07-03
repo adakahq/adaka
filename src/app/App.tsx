@@ -7,6 +7,7 @@ import { MainPane } from "./MainPane";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { CommandPalette } from "./CommandPalette";
 import { Toasts } from "./Toasts";
+import { ConfirmPanel } from "./ConfirmPanel";
 import { getPref, setPref } from "../shared/prefs";
 import type { Theme } from "./store";
 
@@ -69,6 +70,7 @@ function Shell() {
           <WelcomeScreen />
         </div>
         <CommandPalette />
+        <ConfirmPanel />
         <Toasts />
       </div>
     );
@@ -82,6 +84,7 @@ function Shell() {
         <MainPane />
       </div>
       <CommandPalette />
+      <ConfirmPanel />
       <Toasts />
     </div>
   );
