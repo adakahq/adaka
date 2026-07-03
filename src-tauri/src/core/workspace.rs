@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use rand::Rng;
@@ -174,6 +175,7 @@ fn parse_workspace_toml(raw: &str, root: &Path) -> Result<WorkspaceInfo, Workspa
         .get("version")
         .and_then(|v| v.as_integer())
         .unwrap_or(CURRENT_VERSION);
+    // TODO(migrations): reject version > CURRENT_VERSION once migration support lands
     let name = doc
         .get("name")
         .and_then(|v| v.as_str())
@@ -214,8 +216,16 @@ fn bool_field(tbl: &toml_edit::Table, key: &str, default: bool) -> bool {
 /// escapes the `.adaka/` directory. Uses `canonicalize` on the parent so
 /// symlinks are resolved before comparison.
 fn resolve_scoped_path(root: &Path, relative: &str) -> Result<PathBuf, WorkspaceError> {
-    // Fast reject: forbid components that could escape.
-    if relative.contains("..") || relative.starts_with('/') || relative.starts_with('\\') {
+    // Fast reject: forbid components that could escape. The drive-letter
+    // check catches Windows absolute paths like C:\evil or C:/evil.
+    let has_drive_letter = relative.len() >= 2
+        && relative.as_bytes()[0].is_ascii_alphabetic()
+        && relative.as_bytes()[1] == b':';
+    if relative.contains("..")
+        || relative.starts_with('/')
+        || relative.starts_with('\\')
+        || has_drive_letter
+    {
         return Err(WorkspaceError::PathTraversal(relative.to_string()));
     }
 
@@ -259,10 +269,12 @@ fn nearest_existing_ancestor(path: &Path) -> PathBuf {
     p
 }
 
-/// Atomic write: write to a sibling temp file, then rename. On the same
-/// filesystem, rename is atomic on both Unix and Windows (NTFS MoveFileEx
-/// with REPLACE_EXISTING). This ensures a crash never leaves a half-written
-/// file.
+/// Atomic + durable write: create a sibling temp file, write content,
+/// fsync the file to flush to disk, then rename. Without the fsync a
+/// power loss could leave the final path pointing at an empty or
+/// partial file (the rename landed in the journal but the data didn't
+/// reach the platter). On Unix we also fsync the parent directory after
+/// the rename so the directory entry itself is durable.
 fn atomic_write(path: &Path, content: &str) -> Result<(), WorkspaceError> {
     let parent = path.parent().ok_or_else(|| {
         WorkspaceError::Io(std::io::Error::new(
@@ -277,14 +289,30 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), WorkspaceError> {
     let mut tmp_path = parent.to_path_buf();
     tmp_path.push(format!(".adaka-tmp-{}", generate_hex_id()));
 
-    fs::write(&tmp_path, content)?;
+    // Explicit File::create → write_all → sync_all instead of fs::write
+    // so we guarantee data is on disk before the rename.
+    let mut file = File::create(&tmp_path)?;
+    file.write_all(content.as_bytes())?;
+    file.sync_all()?;
+    // Drop the handle before rename — Windows requires the file to be
+    // closed before it can be atomically replaced.
+    drop(file);
 
-    // `fs::rename` replaces the target atomically on both platforms.
     if let Err(e) = fs::rename(&tmp_path, path) {
-        // Best-effort cleanup of the temp file.
         let _ = fs::remove_file(&tmp_path);
         return Err(WorkspaceError::Io(e));
     }
+
+    // On Unix, fsync the parent directory so the new directory entry is
+    // durable. Windows flushes directory metadata as part of NTFS
+    // journaling so this isn't needed there.
+    #[cfg(unix)]
+    {
+        if let Ok(dir) = File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+
     Ok(())
 }
 
@@ -482,6 +510,53 @@ mod tests {
         assert!(
             matches!(err, WorkspaceError::TomlParse(_)),
             "expected TomlParse, got: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn path_traversal_rejected_windows_drive_backslash() {
+        let root = tmp_root();
+        create(root.path(), "Win Drive").unwrap();
+
+        let err = read_file(root.path(), r"C:\evil").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn path_traversal_rejected_windows_drive_slash() {
+        let root = tmp_root();
+        create(root.path(), "Win Drive Fwd").unwrap();
+
+        let err = read_file(root.path(), "C:/evil").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn path_traversal_rejected_symlink_escape() {
+        use std::os::unix::fs as unix_fs;
+
+        let root = tmp_root();
+        create(root.path(), "Symlink Escape").unwrap();
+
+        let adaka_dir = root.path().join(ADAKA_DIR);
+        let link_path = adaka_dir.join("escape-link");
+        // Symlink pointing outside .adaka/ — should be caught by
+        // canonicalize-based containment check.
+        unix_fs::symlink("/tmp", &link_path).unwrap();
+
+        let err = read_file(root.path(), "escape-link/some-file").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal for symlink escape, got: {err}"
         );
     }
 }
