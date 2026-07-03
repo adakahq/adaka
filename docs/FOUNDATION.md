@@ -128,6 +128,13 @@ API_TOKEN = "keychain"           # resolved at runtime via keychain entry
 
 Interpolation syntax everywhere in workspace files: `{{BASE_URL}}/users`. Resolution happens in the Rust core (single implementation, every module gets it for free).
 
+**Interpolation conventions:**
+
+- Whitespace inside braces is trimmed: `{{ BASE_URL }}` is equivalent to `{{BASE_URL}}`.
+- Escaped braces: `\{{` produces a literal `{{` in output. Use this when the file content must contain literal double-brace sequences.
+- No recursive resolution: if a variable's value contains `{{X}}`, it stays as the literal string `{{X}}` — there is no second pass. This prevents accidental infinite loops and keeps behaviour predictable.
+- An unknown variable (not in `[vars]`, `[secrets]`, or OS env) is an error (`UnknownVar`), not a silent empty string.
+
 ### 4.3 Requests — `requests/**/<name>.req.toml`
 
 ```toml
@@ -243,6 +250,13 @@ export interface AdakaModule {
   onWorkspaceClose?(): void | Promise<void>;
 }
 
+export interface PaletteCommand {
+  id: string;
+  label: string;
+  keywords?: string[];
+  action: (ctx: ModuleContext) => void;  // shell passes the owning module's context
+}
+
 export interface ModuleContext {
   workspace: WorkspaceInfo;                          // id, name, root path
   env: { active(): EnvName; resolve(t: string): Promise<string> };
@@ -254,6 +268,14 @@ export interface ModuleContext {
   ui: { toast(msg: string, kind?: "info" | "error"): void; openTab(route: string): void };
 }
 ```
+
+Context reaches modules through two channels:
+
+1. **`onWorkspaceOpen(ctx)`** — lifecycle callback when a workspace is opened. Use for one-time setup.
+2. **`useModuleContext()`** — React hook available inside route components. The shell wraps each rendered route in a `ModuleContextProvider`. Throws if used outside a provider.
+3. **Palette command actions** receive the owning module's context as a parameter: `action(ctx) => ctx.ui.openTab("json")`.
+
+The module registry holds only registration data — no behavior, no global handlers.
 
 Rules:
 
@@ -293,6 +315,8 @@ The event bus is the moat. Every module publishes typed events to core topics:
 Events are timestamped and written to a ring buffer + SQLite. The **Timeline view** (a shell feature, not a module) renders them interleaved: fire a request and see, in one strip, the request → the SQL it caused → the log lines it produced → the email it triggered. No combination of separate tools can offer this; it is the reason the suite beats five best-of-breed apps.
 
 MVP scope for the timeline: collect and store events from day one (cheap), render the view in phase 2.
+
+**Topic versioning:** Topics are versioned strings. Adding a new topic is backward-compatible — old consumers simply ignore unknown topics. Renaming or removing a topic is a breaking change that requires a migration and a major version bump. Payloads are `serde_json::Value` and may grow new fields freely; consumers must tolerate unknown keys.
 
 ## 8. Security model
 

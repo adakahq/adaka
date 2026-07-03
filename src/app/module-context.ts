@@ -1,0 +1,61 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { ModuleContext, WorkspaceInfo } from "../shared/module-sdk";
+import { getModules } from "../shared/module-sdk";
+import { emitEvent, onEvent } from "../shared/events";
+import { useShellStore } from "./store";
+
+export function buildModuleContext(
+  ws: WorkspaceInfo,
+  moduleId: string,
+): ModuleContext {
+  return {
+    workspace: ws,
+
+    env: {
+      active: () => useShellStore.getState().activeEnv,
+      resolve: (template: string) =>
+        invoke<string>("env_resolve", {
+          path: ws.root,
+          envName: useShellStore.getState().activeEnv,
+          template,
+        }),
+    },
+
+    invoke: <T>(command: string, args?: Record<string, unknown>) =>
+      invoke<T>(command, args),
+
+    events: {
+      emit: async (topic: string, payload: unknown) => {
+        await emitEvent(topic, payload);
+      },
+      on: (topic: string, handler: (event: unknown) => void) =>
+        onEvent(topic, (e) => handler(e.payload)),
+    },
+
+    ui: {
+      toast: (msg: string, kind?: "info" | "error") =>
+        useShellStore.getState().addToast(msg, kind),
+      openTab: (route: string) => {
+        const mod = getModules().find((m) => m.id === moduleId);
+        const routeDef = mod?.routes.find((r) => r.path === route);
+        const label = routeDef?.label ?? route;
+        useShellStore.getState().openTab({
+          id: `${moduleId}:${route}`,
+          label,
+          moduleId,
+          routePath: route,
+        });
+      },
+    },
+  };
+}
+
+export function buildAllModuleContexts(
+  ws: WorkspaceInfo,
+): Map<string, ModuleContext> {
+  const map = new Map<string, ModuleContext>();
+  for (const mod of getModules()) {
+    map.set(mod.id, buildModuleContext(ws, mod.id));
+  }
+  return map;
+}
