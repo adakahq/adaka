@@ -126,35 +126,38 @@ pub fn resolve(template: &str, env: &Environment) -> Result<String, EnvError> {
     let bytes = template.as_bytes();
     let len = bytes.len();
     let mut i = 0;
+    // Tracks the start of a run of literal text. We flush
+    // template[literal_start..i] whenever we hit a special sequence,
+    // avoiding per-byte char conversion that would corrupt multi-byte UTF-8.
+    let mut literal_start = 0;
 
     while i < len {
         if i + 1 < len && bytes[i] == b'\\' && bytes[i + 1] == b'{' {
-            // Escaped brace: \{{ → literal {{
-            // Consume the backslash, emit the next char literally.
+            result.push_str(&template[literal_start..i]);
             result.push('{');
             i += 2;
+            literal_start = i;
             continue;
         }
 
         if i + 1 < len && bytes[i] == b'{' && bytes[i + 1] == b'{' {
-            // Find closing }}
             if let Some(close) = find_closing_braces(template, i + 2) {
+                result.push_str(&template[literal_start..i]);
+
                 let var_raw = &template[i + 2..close];
                 let var_name = var_raw.trim();
 
                 if var_name.is_empty() {
-                    // Empty placeholder — treat as literal
                     result.push_str("{{}}");
                     i = close + 2;
+                    literal_start = i;
                     continue;
                 }
 
-                // Check if it's a secret
                 if env.secrets.contains(&var_name.to_string()) {
                     return Err(EnvError::SecretUnavailable(var_name.to_string()));
                 }
 
-                // Resolution order: OS env < [vars] (later wins)
                 let value = env
                     .vars
                     .get(var_name)
@@ -167,14 +170,15 @@ pub fn resolve(template: &str, env: &Environment) -> Result<String, EnvError> {
                 }
 
                 i = close + 2;
+                literal_start = i;
                 continue;
             }
         }
 
-        result.push(bytes[i] as char);
         i += 1;
     }
 
+    result.push_str(&template[literal_start..]);
     Ok(result)
 }
 
@@ -370,5 +374,25 @@ mod tests {
         let env = sample_env();
         let result = resolve("{{unclosed", &env).unwrap();
         assert_eq!(result, "{{unclosed");
+    }
+
+    #[test]
+    fn multibyte_utf8_around_placeholder() {
+        let env = sample_env();
+        let result = resolve("café → {{BASE_URL}} — done ✓", &env).unwrap();
+        assert_eq!(result, "café → http://localhost:8000 — done ✓");
+    }
+
+    #[test]
+    fn multibyte_utf8_in_var_value() {
+        let mut vars = HashMap::new();
+        vars.insert("GREETING".to_string(), "héllo wörld 🌍".to_string());
+        let env = Environment {
+            name: "test".to_string(),
+            vars,
+            secrets: vec![],
+        };
+        let result = resolve("say: {{GREETING}}!", &env).unwrap();
+        assert_eq!(result, "say: héllo wörld 🌍!");
     }
 }
