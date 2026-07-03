@@ -301,6 +301,8 @@ Events are timestamped and written to a ring buffer + SQLite. The **Timeline vie
 
 MVP scope for the timeline: collect and store events from day one (cheap), render the view in phase 2.
 
+**Topic versioning:** Topics are versioned strings. Adding a new topic is backward-compatible — old consumers simply ignore unknown topics. Renaming or removing a topic is a breaking change that requires a migration and a major version bump. Payloads are `serde_json::Value` and may grow new fields freely; consumers must tolerate unknown keys.
+
 ## 8. Security model
 
 - Secrets: OS keychain only; `.adaka/` must always be publishable. A pre-commit-style lint command (`adaka doctor`) scans workspace files for high-entropy strings and warns.
