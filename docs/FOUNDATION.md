@@ -224,7 +224,7 @@ The core is a set of services every module consumes. No module reimplements any 
 | **Process supervisor** | Start/stop/monitor long-running module servers (mock server, SMTP catcher, tailed commands) with health state |
 | **History store** | SQLite in app-data: request/response history, query history, indexed and searchable |
 
-Tauri command naming convention: `core:*` for shared services, `<module>:*` for module commands (`api:send_request`, `db:run_query`, `mail:list_messages`). Enforced by lint/review.
+Tauri command naming convention (conceptual): `core:*` for shared services, `<module>:*` for module commands. Because Tauri identifiers cannot contain colons, the actual Rust function names use `<area>_<action>` (e.g. `workspace_open`, `workspace_create`, `api_send_request`, `db_run_query`). The `core:*` / `<module>:*` notation in this document is for orientation; code uses underscores. Enforced by lint/review.
 
 ## 6. Module contract
 
