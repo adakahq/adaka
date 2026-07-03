@@ -17,3 +17,4 @@ Thumbs.db
 # Env & secrets (belt and braces — secrets should be in the keychain anyway)
 .env
 .env.*
+.claude*
