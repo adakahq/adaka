@@ -128,6 +128,13 @@ API_TOKEN = "keychain"           # resolved at runtime via keychain entry
 
 Interpolation syntax everywhere in workspace files: `{{BASE_URL}}/users`. Resolution happens in the Rust core (single implementation, every module gets it for free).
 
+**Interpolation conventions:**
+
+- Whitespace inside braces is trimmed: `{{ BASE_URL }}` is equivalent to `{{BASE_URL}}`.
+- Escaped braces: `\{{` produces a literal `{{` in output. Use this when the file content must contain literal double-brace sequences.
+- No recursive resolution: if a variable's value contains `{{X}}`, it stays as the literal string `{{X}}` — there is no second pass. This prevents accidental infinite loops and keeps behaviour predictable.
+- An unknown variable (not in `[vars]`, `[secrets]`, or OS env) is an error (`UnknownVar`), not a silent empty string.
+
 ### 4.3 Requests — `requests/**/<name>.req.toml`
 
 ```toml

@@ -1,6 +1,6 @@
 mod core;
 
-use core::workspace;
+use core::{env, workspace};
 
 pub fn run() {
     tauri::Builder::default()
@@ -10,6 +10,8 @@ pub fn run() {
             workspace::workspace_create,
             workspace::workspace_read_file,
             workspace::workspace_write_file,
+            env::env_list,
+            env::env_resolve,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Adaka");
