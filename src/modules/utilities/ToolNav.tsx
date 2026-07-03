@@ -1,4 +1,4 @@
-import { requestOpenTab } from "../../shared/module-sdk";
+import { useModuleContext } from "../../shared/module-sdk";
 
 interface Tool {
   id: string;
@@ -21,6 +21,8 @@ interface Props {
 }
 
 export function ToolNav({ activeId, children }: Props) {
+  const ctx = useModuleContext();
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 gap-px overflow-x-auto border-b border-adaka-border bg-adaka-chrome px-2">
@@ -32,7 +34,7 @@ export function ToolNav({ activeId, children }: Props) {
                 ? "border-b-2 border-b-adaka-gold text-adaka-text"
                 : "text-adaka-muted hover:text-adaka-text"
             }`}
-            onClick={() => requestOpenTab("utilities", t.id, t.label)}
+            onClick={() => ctx.ui.openTab(t.id)}
           >
             {t.label}
           </button>

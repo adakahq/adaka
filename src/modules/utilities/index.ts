@@ -1,4 +1,4 @@
-import { registerModule, requestOpenTab } from "../../shared/module-sdk";
+import { registerModule } from "../../shared/module-sdk";
 import type { AdakaModule, PaletteCommand } from "../../shared/module-sdk";
 import {
   JsonRoute,
@@ -10,18 +10,14 @@ import {
   TimestampRoute,
 } from "./routes";
 
-function openToolTab(id: string, label: string) {
-  requestOpenTab("utilities", id, label);
-}
-
 const commands: PaletteCommand[] = [
-  { id: "util:format-json", label: "Format JSON", keywords: ["json", "pretty", "beautify"], action: () => openToolTab("json", "JSON") },
-  { id: "util:decode-jwt", label: "Decode JWT", keywords: ["jwt", "token"], action: () => openToolTab("jwt", "JWT") },
-  { id: "util:base64", label: "Base64 Encode/Decode", keywords: ["base64", "encode", "decode"], action: () => openToolTab("base64", "Base64") },
-  { id: "util:uuid", label: "Generate UUID/ULID", keywords: ["uuid", "ulid", "id", "generate"], action: () => openToolTab("uuid", "UUID/ULID") },
-  { id: "util:hash", label: "Hash Text", keywords: ["hash", "sha", "digest"], action: () => openToolTab("hash", "Hash") },
-  { id: "util:url-encode", label: "URL Encode/Decode", keywords: ["url", "encode", "decode", "percent"], action: () => openToolTab("url", "URL") },
-  { id: "util:timestamp", label: "Convert Timestamp", keywords: ["timestamp", "unix", "date", "time", "epoch"], action: () => openToolTab("timestamp", "Timestamp") },
+  { id: "util:format-json", label: "Format JSON", keywords: ["json", "pretty", "beautify"], action: (ctx) => ctx.ui.openTab("json") },
+  { id: "util:decode-jwt", label: "Decode JWT", keywords: ["jwt", "token"], action: (ctx) => ctx.ui.openTab("jwt") },
+  { id: "util:base64", label: "Base64 Encode/Decode", keywords: ["base64", "encode", "decode"], action: (ctx) => ctx.ui.openTab("base64") },
+  { id: "util:uuid", label: "Generate UUID/ULID", keywords: ["uuid", "ulid", "id", "generate"], action: (ctx) => ctx.ui.openTab("uuid") },
+  { id: "util:hash", label: "Hash Text", keywords: ["hash", "sha", "digest"], action: (ctx) => ctx.ui.openTab("hash") },
+  { id: "util:url-encode", label: "URL Encode/Decode", keywords: ["url", "encode", "decode", "percent"], action: (ctx) => ctx.ui.openTab("url") },
+  { id: "util:timestamp", label: "Convert Timestamp", keywords: ["timestamp", "unix", "date", "time", "epoch"], action: (ctx) => ctx.ui.openTab("timestamp") },
 ];
 
 const utilitiesModule: AdakaModule = {

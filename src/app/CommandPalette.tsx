@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getModules, type PaletteCommand } from "../shared/module-sdk";
+import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { openWorkspace, createWorkspace } from "./workspace-actions";
+
+interface ResolvedCommand {
+  cmd: PaletteCommand;
+  ctx: ModuleContext | null;
+  moduleId: string | null;
+}
 
 function fuzzyMatch(query: string, text: string): boolean {
   const q = query.toLowerCase();
@@ -40,35 +46,51 @@ function highlightFuzzy(query: string, text: string): React.ReactNode {
   return parts;
 }
 
-function builtinCommands(): PaletteCommand[] {
+function builtinCommands(): ResolvedCommand[] {
   const store = useShellStore.getState();
-  const cmds: PaletteCommand[] = [
+  const cmds: ResolvedCommand[] = [
     {
-      id: "builtin:open-workspace",
-      label: "Open workspace",
-      keywords: ["folder", "project"],
-      action: () => void openWorkspace(),
+      cmd: {
+        id: "builtin:open-workspace",
+        label: "Open workspace",
+        keywords: ["folder", "project"],
+        action: () => void openWorkspace(),
+      },
+      ctx: null,
+      moduleId: null,
     },
     {
-      id: "builtin:create-workspace",
-      label: "Create workspace",
-      keywords: ["new", "init"],
-      action: () => void createWorkspace(),
+      cmd: {
+        id: "builtin:create-workspace",
+        label: "Create workspace",
+        keywords: ["new", "init"],
+        action: () => void createWorkspace(),
+      },
+      ctx: null,
+      moduleId: null,
     },
     {
-      id: "builtin:toggle-theme",
-      label: `Switch to ${store.theme === "dark" ? "light" : "dark"} mode`,
-      keywords: ["theme", "dark", "light"],
-      action: () => store.setTheme(store.theme === "dark" ? "light" : "dark"),
+      cmd: {
+        id: "builtin:toggle-theme",
+        label: `Switch to ${store.theme === "dark" ? "light" : "dark"} mode`,
+        keywords: ["theme", "dark", "light"],
+        action: () => store.setTheme(store.theme === "dark" ? "light" : "dark"),
+      },
+      ctx: null,
+      moduleId: null,
     },
   ];
 
   for (const tab of store.tabs) {
     cmds.push({
-      id: `builtin:tab:${tab.id}`,
-      label: `Switch to: ${tab.label}`,
-      keywords: ["tab", "switch"],
-      action: () => store.setActiveTab(tab.id),
+      cmd: {
+        id: `builtin:tab:${tab.id}`,
+        label: `Switch to: ${tab.label}`,
+        keywords: ["tab", "switch"],
+        action: () => store.setActiveTab(tab.id),
+      },
+      ctx: null,
+      moduleId: null,
     });
   }
 
@@ -82,18 +104,23 @@ export function CommandPalette() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const moduleContexts = useShellStore((s) => s.moduleContexts);
+
   const allCommands = useMemo(() => {
     if (!open) return [];
-    const moduleCommands = getModules().flatMap((m) => m.commands);
-    return [...builtinCommands(), ...moduleCommands];
-  }, [open]);
+    const moduleResolved: ResolvedCommand[] = getModules().flatMap((m) => {
+      const ctx = moduleContexts.get(m.id) ?? null;
+      return m.commands.map((cmd) => ({ cmd, ctx, moduleId: m.id }));
+    });
+    return [...builtinCommands(), ...moduleResolved];
+  }, [open, moduleContexts]);
 
   const filtered = useMemo(() => {
     if (!query) return allCommands;
     return allCommands.filter(
-      (c) =>
-        fuzzyMatch(query, c.label) ||
-        c.keywords?.some((k) => fuzzyMatch(query, k)),
+      (rc) =>
+        fuzzyMatch(query, rc.cmd.label) ||
+        rc.cmd.keywords?.some((k) => fuzzyMatch(query, k)),
     );
   }, [query, allCommands]);
 
@@ -110,9 +137,13 @@ export function CommandPalette() {
   }, [open]);
 
   const run = useCallback(
-    (cmd: PaletteCommand) => {
+    (rc: ResolvedCommand) => {
       setPaletteOpen(false);
-      cmd.action();
+      if (rc.ctx) {
+        rc.cmd.action(rc.ctx);
+      } else {
+        rc.cmd.action(null as unknown as ModuleContext);
+      }
     },
     [setPaletteOpen],
   );
@@ -127,8 +158,8 @@ export function CommandPalette() {
         setSelectedIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const cmd = filtered[selectedIdx];
-        if (cmd) run(cmd);
+        const rc = filtered[selectedIdx];
+        if (rc) run(rc);
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
       }
@@ -159,18 +190,18 @@ export function CommandPalette() {
           {filtered.length === 0 && (
             <p className="px-4 py-3 text-sm text-adaka-faint">No results</p>
           )}
-          {filtered.map((cmd, i) => (
+          {filtered.map((rc, i) => (
             <button
-              key={cmd.id}
+              key={rc.cmd.id}
               className={`flex w-full items-center px-4 py-2 text-left text-sm ${
                 i === selectedIdx
                   ? "bg-adaka-gold text-adaka-on-gold"
                   : "text-adaka-text hover:bg-adaka-border"
               }`}
               onMouseEnter={() => setSelectedIdx(i)}
-              onClick={() => run(cmd)}
+              onClick={() => run(rc)}
             >
-              {highlightFuzzy(i === selectedIdx ? "" : query, cmd.label)}
+              {highlightFuzzy(i === selectedIdx ? "" : query, rc.cmd.label)}
             </button>
           ))}
         </div>

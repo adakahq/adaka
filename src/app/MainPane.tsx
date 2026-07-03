@@ -1,9 +1,10 @@
-import { getModules } from "../shared/module-sdk";
+import { getModules, ModuleContextProvider } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 
 export function MainPane() {
   const activeTabId = useShellStore((s) => s.activeTabId);
   const tabs = useShellStore((s) => s.tabs);
+  const moduleContexts = useShellStore((s) => s.moduleContexts);
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   if (!activeTab) {
@@ -25,10 +26,18 @@ export function MainPane() {
     );
   }
 
+  const ctx = moduleContexts.get(activeTab.moduleId);
   const Component = route.component;
+
   return (
     <div className="flex-1 overflow-auto">
-      <Component />
+      {ctx ? (
+        <ModuleContextProvider value={ctx}>
+          <Component />
+        </ModuleContextProvider>
+      ) : (
+        <Component />
+      )}
     </div>
   );
 }

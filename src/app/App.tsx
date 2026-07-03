@@ -1,18 +1,6 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { setOpenTabHandler } from "../shared/module-sdk";
 import { useShellStore } from "./store";
-
-import "../modules/utilities";
-
-setOpenTabHandler((moduleId, routePath, label) => {
-  useShellStore.getState().openTab({
-    id: `${moduleId}:${routePath}`,
-    label,
-    moduleId,
-    routePath,
-  });
-});
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { MainPane } from "./MainPane";
@@ -21,6 +9,8 @@ import { CommandPalette } from "./CommandPalette";
 import { Toasts } from "./Toasts";
 import { getPref, setPref } from "../shared/prefs";
 import type { Theme } from "./store";
+
+import "../modules/utilities";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },

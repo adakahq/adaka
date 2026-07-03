@@ -2,13 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getModules, type WorkspaceInfo } from "../shared/module-sdk";
 import { useShellStore } from "./store";
-import { buildModuleContext } from "./module-context";
+import { buildAllModuleContexts } from "./module-context";
 
 async function notifyModules(ws: WorkspaceInfo): Promise<void> {
-  const ctx = buildModuleContext(ws);
+  const ctxs = buildAllModuleContexts(ws);
+  useShellStore.getState().setModuleContexts(ctxs);
   for (const mod of getModules()) {
     if (mod.onWorkspaceOpen) {
-      await mod.onWorkspaceOpen(ctx);
+      const ctx = ctxs.get(mod.id);
+      if (ctx) await mod.onWorkspaceOpen(ctx);
     }
   }
 }

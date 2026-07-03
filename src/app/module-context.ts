@@ -1,9 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ModuleContext, WorkspaceInfo } from "../shared/module-sdk";
+import { getModules } from "../shared/module-sdk";
 import { emitEvent, onEvent } from "../shared/events";
 import { useShellStore } from "./store";
 
-export function buildModuleContext(ws: WorkspaceInfo): ModuleContext {
+export function buildModuleContext(
+  ws: WorkspaceInfo,
+  moduleId: string,
+): ModuleContext {
   return {
     workspace: ws,
 
@@ -32,14 +36,26 @@ export function buildModuleContext(ws: WorkspaceInfo): ModuleContext {
       toast: (msg: string, kind?: "info" | "error") =>
         useShellStore.getState().addToast(msg, kind),
       openTab: (route: string) => {
-        const store = useShellStore.getState();
-        store.openTab({
-          id: `route:${route}`,
-          label: route,
-          moduleId: "",
+        const mod = getModules().find((m) => m.id === moduleId);
+        const routeDef = mod?.routes.find((r) => r.path === route);
+        const label = routeDef?.label ?? route;
+        useShellStore.getState().openTab({
+          id: `${moduleId}:${route}`,
+          label,
+          moduleId,
           routePath: route,
         });
       },
     },
   };
+}
+
+export function buildAllModuleContexts(
+  ws: WorkspaceInfo,
+): Map<string, ModuleContext> {
+  const map = new Map<string, ModuleContext>();
+  for (const mod of getModules()) {
+    map.set(mod.id, buildModuleContext(ws, mod.id));
+  }
+  return map;
 }

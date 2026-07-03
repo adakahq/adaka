@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ToastKind, WorkspaceInfo } from "../shared/module-sdk";
+import type { ModuleContext, ToastKind, WorkspaceInfo } from "../shared/module-sdk";
 
 export type Theme = "dark" | "light";
 
@@ -26,6 +26,7 @@ interface ShellState {
   activeTabId: string | null;
   paletteOpen: boolean;
   toasts: Toast[];
+  moduleContexts: Map<string, ModuleContext>;
 
   setWorkspace: (ws: WorkspaceInfo | null) => void;
   setTheme: (t: Theme) => void;
@@ -36,6 +37,7 @@ interface ShellState {
   setPaletteOpen: (open: boolean) => void;
   addToast: (msg: string, kind?: ToastKind) => void;
   removeToast: (id: number) => void;
+  setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
@@ -46,6 +48,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   activeTabId: null,
   paletteOpen: false,
   toasts: [],
+  moduleContexts: new Map(),
 
   setWorkspace: (ws) => set({ workspace: ws }),
   setTheme: (t) => set({ theme: t }),
@@ -83,4 +86,6 @@ export const useShellStore = create<ShellState>((set, get) => ({
 
   removeToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+  setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
 }));

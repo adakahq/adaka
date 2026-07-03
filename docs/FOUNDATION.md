@@ -250,6 +250,13 @@ export interface AdakaModule {
   onWorkspaceClose?(): void | Promise<void>;
 }
 
+export interface PaletteCommand {
+  id: string;
+  label: string;
+  keywords?: string[];
+  action: (ctx: ModuleContext) => void;  // shell passes the owning module's context
+}
+
 export interface ModuleContext {
   workspace: WorkspaceInfo;                          // id, name, root path
   env: { active(): EnvName; resolve(t: string): Promise<string> };
@@ -261,6 +268,14 @@ export interface ModuleContext {
   ui: { toast(msg: string, kind?: "info" | "error"): void; openTab(route: string): void };
 }
 ```
+
+Context reaches modules through two channels:
+
+1. **`onWorkspaceOpen(ctx)`** — lifecycle callback when a workspace is opened. Use for one-time setup.
+2. **`useModuleContext()`** — React hook available inside route components. The shell wraps each rendered route in a `ModuleContextProvider`. Throws if used outside a provider.
+3. **Palette command actions** receive the owning module's context as a parameter: `action(ctx) => ctx.ui.openTab("json")`.
+
+The module registry holds only registration data — no behavior, no global handlers.
 
 Rules:
 

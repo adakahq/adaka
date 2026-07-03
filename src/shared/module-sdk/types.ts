@@ -16,7 +16,7 @@ export interface PaletteCommand {
   id: string;
   label: string;
   keywords?: string[];
-  action: () => void;
+  action: (ctx: ModuleContext) => void;
 }
 
 export interface WorkspaceInfo {
