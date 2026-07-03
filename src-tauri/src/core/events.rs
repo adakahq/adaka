@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -52,17 +51,25 @@ impl Serialize for EventBusError {
 // EventBus — pure logic, testable without Tauri
 // ---------------------------------------------------------------------------
 
+/// Holds the mutable state that must be updated atomically:
+/// seq assignment, timestamping, and ring insertion all happen
+/// under a single lock so ring order matches seq order.
+struct BusInner {
+    next_seq: u64,
+    ring: VecDeque<Event>,
+}
+
 pub struct EventBus {
-    /// Monotonic counter shared across threads.
-    next_seq: AtomicU64,
-    ring: Mutex<VecDeque<Event>>,
+    inner: Mutex<BusInner>,
 }
 
 impl EventBus {
     pub fn new() -> Self {
         Self {
-            next_seq: AtomicU64::new(1),
-            ring: Mutex::new(VecDeque::with_capacity(RING_CAPACITY)),
+            inner: Mutex::new(BusInner {
+                next_seq: 1,
+                ring: VecDeque::with_capacity(RING_CAPACITY),
+            }),
         }
     }
 
@@ -74,7 +81,11 @@ impl EventBus {
             return Err(EventBusError::UnknownTopic(topic.to_string()));
         }
 
-        let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
+        let mut inner = self.inner.lock().expect("event bus lock poisoned");
+
+        let seq = inner.next_seq;
+        inner.next_seq += 1;
+
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock before UNIX epoch")
@@ -87,22 +98,21 @@ impl EventBus {
             payload,
         };
 
-        let mut ring = self.ring.lock().expect("event bus lock poisoned");
-        if ring.len() == RING_CAPACITY {
-            ring.pop_front();
+        if inner.ring.len() == RING_CAPACITY {
+            inner.ring.pop_front();
         }
         // TODO(timeline-persistence): write event to SQLite here
-        ring.push_back(event.clone());
+        inner.ring.push_back(event.clone());
 
         Ok(event)
     }
 
     /// Return events with seq > since_seq (or all if None).
     pub fn recent(&self, since_seq: Option<u64>) -> Vec<Event> {
-        let ring = self.ring.lock().expect("event bus lock poisoned");
+        let inner = self.inner.lock().expect("event bus lock poisoned");
         match since_seq {
-            Some(s) => ring.iter().filter(|e| e.seq > s).cloned().collect(),
-            None => ring.iter().cloned().collect(),
+            Some(s) => inner.ring.iter().filter(|e| e.seq > s).cloned().collect(),
+            None => inner.ring.iter().cloned().collect(),
         }
     }
 }
@@ -137,12 +147,11 @@ pub fn core_recent_events(since_seq: Option<u64>, bus: tauri::State<'_, EventBus
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
     use std::sync::Arc;
     use std::thread;
 
     #[test]
-    fn seq_monotonicity_across_threads() {
+    fn seq_strictly_increasing_and_timestamps_non_decreasing_across_threads() {
         let bus = Arc::new(EventBus::new());
         let per_thread = 200;
         let num_threads = 5;
@@ -151,35 +160,43 @@ mod tests {
             .map(|_| {
                 let bus = Arc::clone(&bus);
                 thread::spawn(move || {
-                    let mut seqs = Vec::with_capacity(per_thread);
                     for _ in 0..per_thread {
-                        let ev = bus.emit("request.sent", serde_json::json!({})).unwrap();
-                        seqs.push(ev.seq);
+                        bus.emit("request.sent", serde_json::json!({})).unwrap();
                     }
-                    seqs
                 })
             })
             .collect();
 
-        let mut all_seqs: Vec<u64> = Vec::new();
         for h in handles {
-            all_seqs.extend(h.join().unwrap());
+            h.join().unwrap();
         }
 
+        let events = bus.recent(None);
         let total = num_threads * per_thread;
-        assert_eq!(all_seqs.len(), total);
+        assert_eq!(events.len(), total);
 
-        let unique: HashSet<u64> = all_seqs.iter().copied().collect();
-        assert_eq!(unique.len(), total, "every seq must be unique");
+        // Ring order must have strictly increasing seq values.
+        for pair in events.windows(2) {
+            assert!(
+                pair[1].seq == pair[0].seq + 1,
+                "seq not strictly increasing in ring order: {} then {}",
+                pair[0].seq,
+                pair[1].seq
+            );
+        }
 
-        let mut sorted = all_seqs.clone();
-        sorted.sort();
-        assert_eq!(sorted.first().copied(), Some(1), "seqs start at 1");
-        assert_eq!(
-            sorted.last().copied(),
-            Some(total as u64),
-            "seqs are contiguous up to total"
-        );
+        // Timestamps must be non-decreasing in ring order.
+        for pair in events.windows(2) {
+            assert!(
+                pair[1].timestamp_ms >= pair[0].timestamp_ms,
+                "timestamp went backwards: {} then {}",
+                pair[0].timestamp_ms,
+                pair[1].timestamp_ms
+            );
+        }
+
+        assert_eq!(events[0].seq, 1);
+        assert_eq!(events[total - 1].seq, total as u64);
     }
 
     #[test]
@@ -195,6 +212,11 @@ mod tests {
         // Oldest surviving event should be seq 51 (first 50 evicted).
         assert_eq!(events[0].seq, 51);
         assert_eq!(events[RING_CAPACITY - 1].seq, (RING_CAPACITY + 50) as u64);
+
+        // Ring order invariant holds after eviction too.
+        for pair in events.windows(2) {
+            assert!(pair[1].seq == pair[0].seq + 1);
+        }
     }
 
     #[test]
