@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
+import boundaries from "eslint-plugin-boundaries";
 
 export default tseslint.config(
   { ignores: ["dist/", "src-tauri/"] },
@@ -14,41 +15,48 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    rules: {
-      "no-restricted-imports": [
-        "error",
+    plugins: { boundaries },
+    settings: {
+      "import/resolver": {
+        typescript: { alwaysTryTypes: true },
+      },
+      "boundaries/elements": [
+        { type: "app", pattern: "src/app/**" },
+        { type: "shared", pattern: "src/shared/**" },
         {
-          patterns: [
-            {
-              group: ["../modules/*", "../../modules/*", "../../../modules/*"],
-              message:
-                "Modules may not import from other modules. Use src/shared/ or the event bus.",
-            },
-          ],
+          type: "module",
+          pattern: "src/modules/*",
+          mode: "folder",
+          capture: ["moduleName"],
         },
+        { type: "root", pattern: "src/*", mode: "file" },
       ],
+      "boundaries/include": ["src/**/*.{ts,tsx}"],
     },
-  },
-  {
-    files: ["src/modules/*/**.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": [
+      // CLAUDE.md: modules communicate ONLY via the event bus or workspace
+      // files — never by importing each other. Enforced here.
+      "boundaries/dependencies": [
         "error",
         {
-          patterns: [
+          default: "disallow",
+          message:
+            "Cross-module import. Modules talk via src/shared/ or the event bus only (CLAUDE.md).",
+          rules: [
             {
-              group: ["../modules/*", "../../modules/*", "../../../modules/*"],
-              message:
-                "Modules may not import from other modules. Use src/shared/ or the event bus.",
+              from: "module",
+              allow: [
+                "shared",
+                ["module", { moduleName: "{{from.moduleName}}" }],
+              ],
             },
-            {
-              group: ["@/modules/*", "#modules/*"],
-              message:
-                "Modules may not import from other modules. Use src/shared/ or the event bus.",
-            },
+            { from: "app", allow: ["app", "shared", "module"] },
+            { from: "shared", allow: ["shared"] },
+            { from: "root", allow: ["root", "app", "shared"] },
           ],
         },
       ],
+      "boundaries/no-unknown-files": "error",
     },
   },
 );
