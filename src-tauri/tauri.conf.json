@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicmr/tauri/tauri-v2/crates/tauri-cli/schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "Adaka",
   "version": "0.0.0",
   "identifier": "com.adakahq.app",
