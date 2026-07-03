@@ -35,8 +35,23 @@ export interface ModuleToggles {
   logs: boolean;
 }
 
+export type ToastKind = "info" | "error";
+
 export interface ModuleContext {
   workspace: WorkspaceInfo;
+  env: {
+    active(): string;
+    resolve(template: string): Promise<string>;
+  };
+  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
+  events: {
+    emit(topic: string, payload: unknown): Promise<void>;
+    on(topic: string, handler: (event: unknown) => void): Promise<() => void>;
+  };
+  ui: {
+    toast(msg: string, kind?: ToastKind): void;
+    openTab(route: string): void;
+  };
 }
 
 export interface AdakaModule {

@@ -221,7 +221,7 @@ mod tests {
 
     fn tmp_workspace() -> TempDir {
         let root = tempfile::tempdir().expect("failed to create temp dir");
-        workspace::create(root.path(), "Env Test").unwrap();
+        workspace::create(root.path(), Some("Env Test")).unwrap();
         root
     }
 

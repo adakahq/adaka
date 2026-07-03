@@ -11,16 +11,18 @@ export interface AdakaEvent {
 type EventHandler = (event: AdakaEvent) => void;
 
 const topicHandlers = new Map<string, Set<EventHandler>>();
-let globalUnsub: UnlistenFn | null = null;
+let listenerPromise: Promise<UnlistenFn> | null = null;
 
-async function ensureListener(): Promise<void> {
-  if (globalUnsub) return;
-  globalUnsub = await listen<AdakaEvent>("adaka://event", (e) => {
-    const handlers = topicHandlers.get(e.payload.topic);
-    if (handlers) {
-      for (const h of handlers) h(e.payload);
-    }
-  });
+function ensureListener(): Promise<UnlistenFn> {
+  if (!listenerPromise) {
+    listenerPromise = listen<AdakaEvent>("adaka://event", (e) => {
+      const handlers = topicHandlers.get(e.payload.topic);
+      if (handlers) {
+        for (const h of handlers) h(e.payload);
+      }
+    });
+  }
+  return listenerPromise;
 }
 
 export async function onEvent(

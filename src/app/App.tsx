@@ -6,6 +6,7 @@ import { TabBar } from "./TabBar";
 import { MainPane } from "./MainPane";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { CommandPalette } from "./CommandPalette";
+import { Toasts } from "./Toasts";
 import { getPref, setPref } from "../shared/prefs";
 import type { Theme } from "./store";
 
@@ -65,6 +66,7 @@ function Shell() {
           <WelcomeScreen />
         </div>
         <CommandPalette />
+        <Toasts />
       </div>
     );
   }
@@ -77,6 +79,7 @@ function Shell() {
         <MainPane />
       </div>
       <CommandPalette />
+      <Toasts />
     </div>
   );
 }

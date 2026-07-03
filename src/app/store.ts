@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { WorkspaceInfo } from "../shared/module-sdk";
+import type { ToastKind, WorkspaceInfo } from "../shared/module-sdk";
 
 export type Theme = "dark" | "light";
 
@@ -10,30 +10,46 @@ export interface Tab {
   routePath: string;
 }
 
+export interface Toast {
+  id: number;
+  msg: string;
+  kind: ToastKind;
+}
+
+let toastSeq = 0;
+
 interface ShellState {
   workspace: WorkspaceInfo | null;
   theme: Theme;
+  activeEnv: string;
   tabs: Tab[];
   activeTabId: string | null;
   paletteOpen: boolean;
+  toasts: Toast[];
 
   setWorkspace: (ws: WorkspaceInfo | null) => void;
   setTheme: (t: Theme) => void;
+  setActiveEnv: (env: string) => void;
   openTab: (tab: Tab) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
+  addToast: (msg: string, kind?: ToastKind) => void;
+  removeToast: (id: number) => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
   workspace: null,
   theme: "dark",
+  activeEnv: "local",
   tabs: [],
   activeTabId: null,
   paletteOpen: false,
+  toasts: [],
 
   setWorkspace: (ws) => set({ workspace: ws }),
   setTheme: (t) => set({ theme: t }),
+  setActiveEnv: (env) => set({ activeEnv: env }),
 
   openTab: (tab) => {
     const { tabs } = get();
@@ -58,4 +74,13 @@ export const useShellStore = create<ShellState>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+
+  addToast: (msg, kind = "info") => {
+    const id = ++toastSeq;
+    set((s) => ({ toasts: [...s.toasts, { id, msg, kind }] }));
+    setTimeout(() => get().removeToast(id), 4000);
+  },
+
+  removeToast: (id) =>
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

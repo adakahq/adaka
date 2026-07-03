@@ -93,8 +93,9 @@ pub fn open(root: &Path) -> Result<WorkspaceInfo, WorkspaceError> {
 }
 
 /// Create a new workspace: generate an 8-hex id, write workspace.toml
-/// atomically, return the resulting info.
-pub fn create(root: &Path, name: &str) -> Result<WorkspaceInfo, WorkspaceError> {
+/// atomically, return the resulting info. When `name` is None, falls
+/// back to the directory's own name (the last path component).
+pub fn create(root: &Path, name: Option<&str>) -> Result<WorkspaceInfo, WorkspaceError> {
     if !root.is_dir() {
         return Err(WorkspaceError::DirNotFound(root.to_path_buf()));
     }
@@ -104,6 +105,13 @@ pub fn create(root: &Path, name: &str) -> Result<WorkspaceInfo, WorkspaceError> 
         return Err(WorkspaceError::AlreadyExists(ws_path));
     }
 
+    let resolved_name = name.map(|s| s.to_string()).unwrap_or_else(|| {
+        root.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Untitled")
+            .to_string()
+    });
+
     fs::create_dir_all(&adaka_dir)?;
 
     let id = generate_hex_id();
@@ -111,7 +119,7 @@ pub fn create(root: &Path, name: &str) -> Result<WorkspaceInfo, WorkspaceError> 
 
     let mut doc = DocumentMut::new();
     doc["version"] = toml_edit::value(CURRENT_VERSION);
-    doc["name"] = toml_edit::value(name);
+    doc["name"] = toml_edit::value(&resolved_name);
     doc["id"] = toml_edit::value(&id);
 
     let mut tbl = toml_edit::Table::new();
@@ -126,7 +134,7 @@ pub fn create(root: &Path, name: &str) -> Result<WorkspaceInfo, WorkspaceError> 
 
     Ok(WorkspaceInfo {
         id,
-        name: name.to_string(),
+        name: resolved_name,
         version: CURRENT_VERSION,
         root: root.to_path_buf(),
         modules,
@@ -332,8 +340,11 @@ pub fn workspace_open(path: String) -> Result<WorkspaceInfo, WorkspaceError> {
 }
 
 #[tauri::command]
-pub fn workspace_create(path: String, name: String) -> Result<WorkspaceInfo, WorkspaceError> {
-    create(Path::new(&path), &name)
+pub fn workspace_create(
+    path: String,
+    name: Option<String>,
+) -> Result<WorkspaceInfo, WorkspaceError> {
+    create(Path::new(&path), name.as_deref())
 }
 
 #[tauri::command]
@@ -368,7 +379,7 @@ mod tests {
     #[test]
     fn create_then_open_roundtrip() {
         let root = tmp_root();
-        let info = create(root.path(), "Test Project").unwrap();
+        let info = create(root.path(), Some("Test Project")).unwrap();
 
         assert_eq!(info.name, "Test Project");
         assert_eq!(info.version, 1);
@@ -386,7 +397,7 @@ mod tests {
     #[test]
     fn unknown_keys_preserved_on_roundtrip() {
         let root = tmp_root();
-        create(root.path(), "Preserve Test").unwrap();
+        create(root.path(), Some("Preserve Test")).unwrap();
 
         let ws_path = root.path().join(ADAKA_DIR).join(WORKSPACE_FILE);
         let original = fs::read_to_string(&ws_path).unwrap();
@@ -413,7 +424,7 @@ mod tests {
     #[test]
     fn write_file_roundtrip() {
         let root = tmp_root();
-        create(root.path(), "Write Test").unwrap();
+        create(root.path(), Some("Write Test")).unwrap();
 
         let content = "version = 1\nname = \"local\"\n\n[vars]\nBASE_URL = \"http://localhost\"\n";
         write_file(root.path(), "environments/local.toml", content).unwrap();
@@ -425,7 +436,7 @@ mod tests {
     #[test]
     fn path_traversal_rejected_dotdot() {
         let root = tmp_root();
-        create(root.path(), "Traversal Test").unwrap();
+        create(root.path(), Some("Traversal Test")).unwrap();
 
         let err = read_file(root.path(), "../etc/passwd").unwrap_err();
         assert!(
@@ -437,7 +448,7 @@ mod tests {
     #[test]
     fn path_traversal_rejected_absolute() {
         let root = tmp_root();
-        create(root.path(), "Traversal Abs").unwrap();
+        create(root.path(), Some("Traversal Abs")).unwrap();
 
         let err = read_file(root.path(), "/etc/passwd").unwrap_err();
         assert!(
@@ -449,7 +460,7 @@ mod tests {
     #[test]
     fn path_traversal_rejected_backslash() {
         let root = tmp_root();
-        create(root.path(), "Traversal BS").unwrap();
+        create(root.path(), Some("Traversal BS")).unwrap();
 
         let err = read_file(root.path(), "\\Windows\\System32\\config").unwrap_err();
         assert!(
@@ -461,7 +472,7 @@ mod tests {
     #[test]
     fn atomic_write_no_partial_on_invalid_toml() {
         let root = tmp_root();
-        create(root.path(), "Atomic Test").unwrap();
+        create(root.path(), Some("Atomic Test")).unwrap();
 
         // Attempt to write invalid TOML — should fail validation.
         let bad = "this is [not valid {toml";
@@ -479,9 +490,9 @@ mod tests {
     #[test]
     fn create_fails_if_already_exists() {
         let root = tmp_root();
-        create(root.path(), "First").unwrap();
+        create(root.path(), Some("First")).unwrap();
 
-        let err = create(root.path(), "Second").unwrap_err();
+        let err = create(root.path(), Some("Second")).unwrap_err();
         assert!(
             matches!(err, WorkspaceError::AlreadyExists(_)),
             "expected AlreadyExists, got: {err}"
@@ -502,9 +513,20 @@ mod tests {
     }
 
     #[test]
+    fn create_with_none_name_uses_dir_name() {
+        let dir = tempfile::Builder::new()
+            .prefix("my-project")
+            .tempdir()
+            .unwrap();
+        let info = create(dir.path(), None).unwrap();
+        let dir_name = dir.path().file_name().unwrap().to_str().unwrap();
+        assert_eq!(info.name, dir_name);
+    }
+
+    #[test]
     fn write_file_rejects_invalid_toml() {
         let root = tmp_root();
-        create(root.path(), "Validate").unwrap();
+        create(root.path(), Some("Validate")).unwrap();
 
         let err = write_file(root.path(), "test.toml", "[broken").unwrap_err();
         assert!(
@@ -517,7 +539,7 @@ mod tests {
     #[cfg(windows)]
     fn path_traversal_rejected_windows_drive_backslash() {
         let root = tmp_root();
-        create(root.path(), "Win Drive").unwrap();
+        create(root.path(), Some("Win Drive")).unwrap();
 
         let err = read_file(root.path(), r"C:\evil").unwrap_err();
         assert!(
@@ -530,7 +552,7 @@ mod tests {
     #[cfg(windows)]
     fn path_traversal_rejected_windows_drive_slash() {
         let root = tmp_root();
-        create(root.path(), "Win Drive Fwd").unwrap();
+        create(root.path(), Some("Win Drive Fwd")).unwrap();
 
         let err = read_file(root.path(), "C:/evil").unwrap_err();
         assert!(
@@ -545,7 +567,7 @@ mod tests {
         use std::os::unix::fs as unix_fs;
 
         let root = tmp_root();
-        create(root.path(), "Symlink Escape").unwrap();
+        create(root.path(), Some("Symlink Escape")).unwrap();
 
         let adaka_dir = root.path().join(ADAKA_DIR);
         let link_path = adaka_dir.join("escape-link");
