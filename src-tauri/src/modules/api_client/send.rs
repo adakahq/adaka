@@ -193,6 +193,9 @@ fn resolve_all_vars(template: &str, ctx: &EnvContext) -> Result<String, ApiClien
 
                 if let Some((_, sval)) = secret_match {
                     if sval.is_empty() {
+                        // NOTE(keychain-M3): when keychain lands, add an end-to-end integration
+                        // test proving redaction through the full api_send_request path — the
+                        // unit tests on resolve_traced/redacted_snapshot are the interim guarantee.
                         return Err(ApiClientError::UnresolvedVar(var_name.to_string()));
                     }
                     result.push_str(sval);
@@ -698,6 +701,115 @@ pub async fn cancel_all_pending() {
 }
 
 // ---------------------------------------------------------------------------
+// Test-only: prepare with injected EnvContext (bypasses env file loading)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+pub fn prepare_with_ctx(
+    workspace_path: &str,
+    request_path: &str,
+    ctx: EnvContext,
+) -> Result<PreparedRequest, ApiClientError> {
+    let root = std::path::Path::new(workspace_path);
+    let raw = workspace::read_file(root, request_path)?;
+    let req = super::format::parse_request(&raw, request_path).map_err(|detail| {
+        ApiClientError::Parse {
+            file: request_path.to_string(),
+            detail,
+        }
+    })?;
+    let req = resolve_inheritance(root, request_path, req)?;
+
+    let url_result = resolve_traced(&req.url, &ctx)?;
+
+    let mut headers_resolved: Vec<(String, String)> = Vec::new();
+    let mut headers_redacted: Vec<(String, String)> = Vec::new();
+    for (k, v) in &req.headers {
+        let rk = resolve_traced(k, &ctx)?;
+        let rv = resolve_traced(v, &ctx)?;
+        headers_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        headers_redacted.push((rk.redacted, rv.redacted));
+    }
+
+    let mut query_resolved: Vec<(String, String)> = Vec::new();
+    let mut query_redacted: Vec<(String, String)> = Vec::new();
+    for (k, v) in &req.query {
+        let rk = resolve_traced(k, &ctx)?;
+        let rv = resolve_traced(v, &ctx)?;
+        query_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        query_redacted.push((rk.redacted, rv.redacted));
+    }
+
+    let (body_resolved, body_redacted) = match req.body.body_type.as_str() {
+        "none" | "form" => (None, None),
+        _ => {
+            if let Some(content) = &req.body.content {
+                let r = resolve_traced(content, &ctx)?;
+                (Some(r.resolved), Some(r.redacted))
+            } else {
+                (None, None)
+            }
+        }
+    };
+
+    let mut fields = Vec::new();
+    if req.body.body_type == "form" {
+        for field in &req.body.fields {
+            if field.enabled {
+                let fv = resolve_all_vars(&field.value, &ctx)?;
+                fields.push((field.name.clone(), fv));
+            }
+        }
+    }
+
+    let auth_token = if let Some(t) = &req.auth.token {
+        Some(resolve_all_vars(t, &ctx)?)
+    } else {
+        None
+    };
+    let auth_password = if let Some(p) = &req.auth.password {
+        Some(resolve_all_vars(p, &ctx)?)
+    } else {
+        None
+    };
+    let auth_value = if let Some(v) = &req.auth.value {
+        Some(resolve_all_vars(v, &ctx)?)
+    } else {
+        None
+    };
+
+    let request_id = Uuid::new_v4().to_string();
+
+    Ok(PreparedRequest {
+        request_id,
+        method: req.method.clone(),
+        url_resolved: url_result.resolved,
+        url_redacted: url_result.redacted,
+        headers_resolved,
+        headers_redacted,
+        query_resolved,
+        query_redacted,
+        body_resolved,
+        body_redacted,
+        auth_token,
+        auth_password,
+        auth_value,
+        auth_type: req.auth.auth_type.clone(),
+        auth_username: req.auth.username.clone(),
+        auth_key: req.auth.key.clone(),
+        auth_location: req.auth.location.clone(),
+        body_type: req.body.body_type.clone(),
+        body_content_type: req.body.content_type.clone(),
+        fields,
+        settings: PreparedSettings {
+            timeout_ms: req.settings.timeout_ms,
+            follow_redirects: req.settings.follow_redirects,
+            verify_tls: req.settings.verify_tls,
+        },
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -754,5 +866,88 @@ mod tests {
     #[test]
     fn is_binary_text_plain_not_binary() {
         assert!(!is_binary_content("text/plain", b"hello world"));
+    }
+
+    #[test]
+    fn resolve_traced_with_populated_secret_redacts_and_reports() {
+        let ctx = EnvContext {
+            vars: HashMap::from([("HOST".to_string(), "api.example.com".to_string())]),
+            secret_values: vec![("API_SECRET".to_string(), "sk-live-9x8y7z".to_string())],
+        };
+        let result = resolve_traced("https://{{HOST}}/v1?token={{API_SECRET}}", &ctx).unwrap();
+
+        assert_eq!(
+            result.resolved,
+            "https://api.example.com/v1?token=sk-live-9x8y7z"
+        );
+        assert!(!result.redacted.contains("sk-live-9x8y7z"));
+        assert!(result.redacted.contains("•••"));
+        assert_eq!(result.secret_names, vec!["API_SECRET".to_string()]);
+    }
+
+    #[test]
+    fn redacted_snapshot_replaces_secret_in_url_headers_body() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+
+        let req_content = r#"
+version = 1
+name = "Redact test"
+method = "POST"
+url = "https://api.test/v1?key={{SECRET}}"
+
+[headers]
+Authorization = "Bearer {{SECRET}}"
+
+[body]
+type = "json"
+content = '{"token":"{{SECRET}}"}'
+"#;
+        crate::core::workspace::write_file(tmp.path(), "requests/redact.req.toml", req_content)
+            .unwrap();
+
+        let ctx = EnvContext {
+            vars: HashMap::new(),
+            secret_values: vec![("SECRET".to_string(), "real-secret-val-42".to_string())],
+        };
+
+        let prepared = prepare_with_ctx(
+            tmp.path().to_str().unwrap(),
+            "requests/redact.req.toml",
+            ctx,
+        )
+        .unwrap();
+
+        // Wire variants contain the real value
+        assert!(prepared.url_resolved.contains("real-secret-val-42"));
+        assert!(prepared.headers_resolved[0]
+            .1
+            .contains("real-secret-val-42"));
+        assert!(prepared
+            .body_resolved
+            .as_ref()
+            .unwrap()
+            .contains("real-secret-val-42"));
+
+        // Redacted variants do NOT contain the real value
+        assert!(!prepared.url_redacted.contains("real-secret-val-42"));
+        assert!(!prepared.headers_redacted[0]
+            .1
+            .contains("real-secret-val-42"));
+        assert!(!prepared
+            .body_redacted
+            .as_ref()
+            .unwrap()
+            .contains("real-secret-val-42"));
+
+        // Redacted variants contain •••
+        assert!(prepared.url_redacted.contains("•••"));
+        assert!(prepared.headers_redacted[0].1.contains("•••"));
+        assert!(prepared.body_redacted.as_ref().unwrap().contains("•••"));
+
+        // redacted_snapshot uses the redacted variants
+        let snapshot = prepared.redacted_snapshot();
+        assert!(!snapshot.contains("real-secret-val-42"));
+        assert!(snapshot.contains("•••"));
     }
 }

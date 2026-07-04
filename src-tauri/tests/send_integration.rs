@@ -551,8 +551,10 @@ url = "{{BASE_URL}}/api/test?auth={{API_KEY}}"
     assert_eq!(response.url_resolved, prepared.url_redacted);
 }
 
+/// [vars] values are NOT secrets and are NOT redacted — by design.
+/// Only [secrets] entries (resolved via keychain) get ••• treatment.
 #[tokio::test]
-async fn history_snapshot_redacts_secret_values() {
+async fn snapshot_preserves_vars_values() {
     let _guard = TEST_LOCK.lock().await;
     let app = Router::new().route("/api/secret", get(|| async { (StatusCode::OK, "ok") }));
     let addr = start_server(app).await;
@@ -560,9 +562,7 @@ async fn history_snapshot_redacts_secret_values() {
     let tmp = tempfile::tempdir().unwrap();
     setup_workspace(&tmp);
 
-    // Manually create an env context with a "resolved" secret to test redaction
-    // Since the keychain isn't implemented, we test the redacted_snapshot logic
-    // by constructing a PreparedRequest where url_redacted differs from url_resolved
+    // TOKEN is in [vars], not [secrets] — it must NOT be redacted
     let env_content = format!(
         "name = \"test\"\n\n[vars]\nBASE_URL = \"http://127.0.0.1:{}\"\nTOKEN = \"super-secret-abc\"\n",
         addr.port()
@@ -571,15 +571,15 @@ async fn history_snapshot_redacts_secret_values() {
 
     let req_content = r#"
 version = 1
-name = "Secret snap"
+name = "Vars snap"
 method = "GET"
 url = "{{BASE_URL}}/api/secret?key={{TOKEN}}"
 "#;
-    write_file(&tmp, "requests/secret-snap.req.toml", req_content);
+    write_file(&tmp, "requests/vars-snap.req.toml", req_content);
 
     let prepared = adaka_lib::test_helpers::prepare(
         tmp.path().to_str().unwrap(),
-        "requests/secret-snap.req.toml",
+        "requests/vars-snap.req.toml",
         Some("test"),
     )
     .await
@@ -588,23 +588,24 @@ url = "{{BASE_URL}}/api/secret?key={{TOKEN}}"
     let response = adaka_lib::test_helpers::perform(&prepared).await.unwrap();
     assert_eq!(response.status, 200);
 
-    // TOKEN is in [vars] not [secrets], so it won't be redacted
-    // This validates the normal flow; secret redaction kicks in when
-    // the value comes from [secrets] with a non-empty resolved value
+    // [vars] values pass through unredacted into the snapshot
     let snapshot = prepared.redacted_snapshot();
-    assert!(snapshot.contains("super-secret-abc"));
+    assert!(
+        snapshot.contains("super-secret-abc"),
+        "vars values must be preserved (not redacted) in snapshot"
+    );
 
-    // Insert and verify history stores the snapshot as-is
+    // History stores the snapshot as-is
     let db = adaka_lib::test_helpers::open_history_db_in_memory().unwrap();
     db.insert(
         "test-ws",
-        "requests/secret-snap.req.toml",
+        "requests/vars-snap.req.toml",
         &response,
         "2026-07-04T00:00:00Z",
         &snapshot,
     )
     .unwrap();
-    let entries = db.list("test-ws", "requests/secret-snap.req.toml").unwrap();
+    let entries = db.list("test-ws", "requests/vars-snap.req.toml").unwrap();
     assert_eq!(entries.len(), 1);
     assert!(entries[0].request_snapshot.contains("super-secret-abc"));
 }
