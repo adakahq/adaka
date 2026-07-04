@@ -121,7 +121,7 @@ folders upward to the nearest concrete auth; headers merge downward, request-lev
 
 ### 3.3 History (app-data SQLite, NOT in `.adaka/`)
 
-M1 introduces `tauri-plugin-sql` (SQLite). Table `request_history`: id, workspace_id,
+M1 introduces `rusqlite` (bundled, no external SQLite dependency). Table `request_history`: id, workspace_id,
 request_path, method, url_resolved, status, duration_ms, response_size, started_at,
 response_headers (json), response_body (blob, capped — see §4), request_snapshot (json).
 Retention: last 50 per request path, pruned on insert. History panel in UI = simple list

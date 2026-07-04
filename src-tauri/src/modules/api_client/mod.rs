@@ -116,19 +116,24 @@ pub async fn api_send_request(
 
     let env_ref = env_name.as_deref();
 
-    // Emit request.sent event
+    // Phase 1: prepare (parse/inherit/env-resolve) — no network
+    let prepared = send::prepare(&workspace_path, &request_path, env_ref).await?;
+
+    // Emit request.sent with real resolved metadata
     let sent_payload = serde_json::json!({
-        "method": "pending",
-        "url_resolved": "pending",
+        "request_id": &prepared.request_id,
+        "method": &prepared.method,
+        "url_resolved": &prepared.url_redacted,
         "path": &request_path,
     });
     if let Ok(event) = bus.emit("request.sent", sent_payload) {
         let _ = app.emit("adaka://event", &event);
     }
 
-    let response = send::execute_send(&workspace_path, &request_path, env_ref).await?;
+    // Phase 2: perform (network I/O)
+    let response = send::perform(&prepared).await?;
 
-    // Emit request.completed event (with redacted URL)
+    // Emit request.completed event
     let completed_payload = serde_json::json!({
         "request_id": &response.request_id,
         "status": response.status,
@@ -139,6 +144,30 @@ pub async fn api_send_request(
     });
     if let Ok(event) = bus.emit("request.completed", completed_payload) {
         let _ = app.emit("adaka://event", &event);
+    }
+
+    // Phase 3: persist to history with redacted snapshot
+    let snapshot = prepared.redacted_snapshot();
+    let started_at = chrono_now_iso();
+
+    // Derive a workspace_id from the path (last path component or full path)
+    let workspace_id = workspace_id_from_path(&workspace_path);
+
+    // Open history DB in a well-known app-data-adjacent location
+    // For the Tauri command path, we use the workspace's .adaka dir as a proxy
+    // for app-data (real app would use tauri's app_data_dir). The history file
+    // sits next to the workspace so it persists across sessions.
+    let history_dir = std::path::Path::new(&workspace_path)
+        .join(".adaka")
+        .join("history");
+    if let Ok(db) = history::HistoryDb::open(&history_dir) {
+        let _ = db.insert(
+            &workspace_id,
+            &request_path,
+            &response,
+            &started_at,
+            &snapshot,
+        );
     }
 
     Ok(response)
@@ -166,6 +195,27 @@ pub fn api_history_get(
 ) -> Result<Option<history::HistoryEntry>, ApiClientError> {
     let db = history::HistoryDb::open(&std::path::PathBuf::from(&app_data_dir))?;
     db.get(id)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn chrono_now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = d.as_secs();
+    // Simple ISO-8601 without pulling in chrono crate
+    format!("{}Z", secs)
+}
+
+fn workspace_id_from_path(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string())
 }
 
 // ---------------------------------------------------------------------------

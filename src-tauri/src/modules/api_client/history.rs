@@ -49,7 +49,6 @@ impl HistoryDb {
         Ok(db)
     }
 
-    #[cfg(test)]
     pub fn open_in_memory() -> Result<Self, ApiClientError> {
         let conn = Connection::open_in_memory()
             .map_err(|e| ApiClientError::Network(format!("failed to open in-memory db: {}", e)))?;

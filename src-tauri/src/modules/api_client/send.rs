@@ -37,10 +37,6 @@ pub struct SendResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimingInfo {
     pub total_ms: u64,
-    /// Time to first byte (approximated: from request start to first chunk).
-    /// reqwest does not expose DNS/connect/TLS phases separately without
-    /// lower-level hyper hooks. We capture total + first-byte; the rest are
-    /// approximated as 0 and documented as such in the spec update.
     pub first_byte_ms: u64,
     pub dns_ms: u64,
     pub connect_ms: u64,
@@ -49,10 +45,59 @@ pub struct TimingInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Prepared request — result of parse/inherit/env-resolve, before network I/O
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PreparedRequest {
+    pub request_id: String,
+    pub method: String,
+    pub url_resolved: String,
+    pub url_redacted: String,
+    pub headers_resolved: Vec<(String, String)>,
+    pub headers_redacted: Vec<(String, String)>,
+    pub query_resolved: Vec<(String, String)>,
+    pub query_redacted: Vec<(String, String)>,
+    pub body_resolved: Option<String>,
+    pub body_redacted: Option<String>,
+    pub auth_token: Option<String>,
+    pub auth_password: Option<String>,
+    pub auth_value: Option<String>,
+    pub auth_type: String,
+    pub auth_username: Option<String>,
+    pub auth_key: Option<String>,
+    pub auth_location: Option<String>,
+    pub body_type: String,
+    pub body_content_type: Option<String>,
+    pub fields: Vec<(String, String)>,
+    pub settings: PreparedSettings,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PreparedSettings {
+    pub timeout_ms: u64,
+    pub follow_redirects: bool,
+    pub verify_tls: bool,
+}
+
+impl PreparedRequest {
+    /// Build a redacted JSON snapshot for history storage.
+    pub fn redacted_snapshot(&self) -> String {
+        let snapshot = serde_json::json!({
+            "method": self.method,
+            "url": self.url_redacted,
+            "headers": self.headers_redacted,
+            "query": self.query_redacted,
+            "body": self.body_redacted,
+        });
+        serde_json::to_string(&snapshot).unwrap_or_default()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Traced env resolution (secret redaction support)
 // ---------------------------------------------------------------------------
 
-/// Resolve `{{VAR}}` placeholders and track which resolved from [secrets].
 pub struct ResolveResult {
     pub resolved: String,
     pub redacted: String,
@@ -69,8 +114,7 @@ pub fn resolve_traced(
     let mut redacted = resolved.clone();
     let mut secret_names = Vec::new();
 
-    for name in &env_ctx.secret_values {
-        let (sname, sval) = name;
+    for (sname, sval) in &env_ctx.secret_values {
         if !sval.is_empty() && redacted.contains(sval.as_str()) {
             redacted = redacted.replace(sval.as_str(), "•••");
             secret_names.push(sname.clone());
@@ -93,8 +137,6 @@ pub struct EnvContext {
 
 impl EnvContext {
     pub fn from_environment(env: &Environment) -> Self {
-        // For secrets: keychain not yet implemented, so we store empty values.
-        // When keychain lands, this will resolve from the OS keychain.
         let secret_values: Vec<(String, String)> = env
             .secrets
             .iter()
@@ -200,14 +242,17 @@ fn cancel_registry() -> &'static CancelMap {
 }
 
 // ---------------------------------------------------------------------------
-// Send logic
+// Prepare phase — parse/inherit/env-resolve, no network
 // ---------------------------------------------------------------------------
 
-pub async fn execute_send(
+/// Prepare a request for sending: parse, resolve inheritance, resolve env vars.
+/// Returns a PreparedRequest with request_id assigned, or an error (e.g.
+/// UNRESOLVED_VAR) that short-circuits before any network I/O.
+pub async fn prepare(
     workspace_path: &str,
     request_path: &str,
     env_name: Option<&str>,
-) -> Result<SendResponse, ApiClientError> {
+) -> Result<PreparedRequest, ApiClientError> {
     let root = std::path::Path::new(workspace_path);
 
     // 1. Parse request
@@ -230,67 +275,121 @@ pub async fn execute_send(
         EnvContext::empty()
     };
 
-    // 4. Resolve variables (UNRESOLVED_VAR error before any network I/O)
+    // 4. Resolve variables — UNRESOLVED_VAR error before network
     let url_result = resolve_traced(&req.url, &env_ctx)?;
-    let url_resolved = url_result.resolved;
-    let url_redacted = url_result.redacted;
 
-    let mut resolved_headers: Vec<(String, String)> = Vec::new();
+    let mut headers_resolved: Vec<(String, String)> = Vec::new();
+    let mut headers_redacted: Vec<(String, String)> = Vec::new();
     for (k, v) in &req.headers {
-        let rk = resolve_all_vars(k, &env_ctx)?;
-        let rv = resolve_all_vars(v, &env_ctx)?;
-        resolved_headers.push((rk, rv));
+        let rk = resolve_traced(k, &env_ctx)?;
+        let rv = resolve_traced(v, &env_ctx)?;
+        headers_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        headers_redacted.push((rk.redacted, rv.redacted));
     }
 
-    let mut resolved_query: Vec<(String, String)> = Vec::new();
+    let mut query_resolved: Vec<(String, String)> = Vec::new();
+    let mut query_redacted: Vec<(String, String)> = Vec::new();
     for (k, v) in &req.query {
-        let rk = resolve_all_vars(k, &env_ctx)?;
-        let rv = resolve_all_vars(v, &env_ctx)?;
-        resolved_query.push((rk, rv));
+        let rk = resolve_traced(k, &env_ctx)?;
+        let rv = resolve_traced(v, &env_ctx)?;
+        query_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        query_redacted.push((rk.redacted, rv.redacted));
     }
 
-    let resolved_body = match req.body.body_type.as_str() {
-        "none" => None,
+    let (body_resolved, body_redacted) = match req.body.body_type.as_str() {
+        "none" => (None, None),
+        "form" => (None, None), // form fields handled separately
         _ => {
             if let Some(content) = &req.body.content {
-                Some(resolve_all_vars(content, &env_ctx)?)
+                let r = resolve_traced(content, &env_ctx)?;
+                (Some(r.resolved), Some(r.redacted))
             } else {
-                None
+                (None, None)
             }
         }
     };
 
+    // Resolve form fields
+    let mut fields = Vec::new();
+    if req.body.body_type == "form" {
+        for field in &req.body.fields {
+            if field.enabled {
+                let fv = resolve_all_vars(&field.value, &env_ctx)?;
+                fields.push((field.name.clone(), fv));
+            }
+        }
+    }
+
     // Resolve auth tokens/passwords
-    let resolved_auth_token = if let Some(t) = &req.auth.token {
+    let auth_token = if let Some(t) = &req.auth.token {
         Some(resolve_all_vars(t, &env_ctx)?)
     } else {
         None
     };
-    let resolved_auth_password = if let Some(p) = &req.auth.password {
+    let auth_password = if let Some(p) = &req.auth.password {
         Some(resolve_all_vars(p, &env_ctx)?)
     } else {
         None
     };
-    let resolved_auth_value = if let Some(v) = &req.auth.value {
+    let auth_value = if let Some(v) = &req.auth.value {
         Some(resolve_all_vars(v, &env_ctx)?)
     } else {
         None
     };
 
-    // 5. Build reqwest client with settings
     let request_id = Uuid::new_v4().to_string();
 
-    let redirect_policy = if req.settings.follow_redirects {
+    Ok(PreparedRequest {
+        request_id,
+        method: req.method.clone(),
+        url_resolved: url_result.resolved,
+        url_redacted: url_result.redacted,
+        headers_resolved,
+        headers_redacted,
+        query_resolved,
+        query_redacted,
+        body_resolved,
+        body_redacted,
+        auth_token,
+        auth_password,
+        auth_value,
+        auth_type: req.auth.auth_type.clone(),
+        auth_username: req.auth.username.clone(),
+        auth_key: req.auth.key.clone(),
+        auth_location: req.auth.location.clone(),
+        body_type: req.body.body_type.clone(),
+        body_content_type: req.body.content_type.clone(),
+        fields,
+        settings: PreparedSettings {
+            timeout_ms: req.settings.timeout_ms,
+            follow_redirects: req.settings.follow_redirects,
+            verify_tls: req.settings.verify_tls,
+        },
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Perform phase — network I/O with the prepared request
+// ---------------------------------------------------------------------------
+
+/// Execute the HTTP call from a PreparedRequest. Registers the request_id in
+/// the cancel map before starting, and always removes it on completion.
+pub async fn perform(prepared: &PreparedRequest) -> Result<SendResponse, ApiClientError> {
+    let request_id = &prepared.request_id;
+
+    let redirect_policy = if prepared.settings.follow_redirects {
         Policy::limited(10)
     } else {
         Policy::none()
     };
 
     let mut client_builder = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(req.settings.timeout_ms))
+        .timeout(std::time::Duration::from_millis(
+            prepared.settings.timeout_ms,
+        ))
         .redirect(redirect_policy);
 
-    if !req.settings.verify_tls {
+    if !prepared.settings.verify_tls {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
 
@@ -306,44 +405,43 @@ pub async fn execute_send(
         map.insert(request_id.clone(), cancel_tx);
     }
 
-    // 6. Build request
-    let method =
-        reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|_| ApiClientError::Parse {
-            file: request_path.to_string(),
-            detail: format!("invalid HTTP method: {}", req.method),
-        })?;
+    let method = reqwest::Method::from_bytes(prepared.method.as_bytes()).map_err(|_| {
+        ApiClientError::Parse {
+            file: String::new(),
+            detail: format!("invalid HTTP method: {}", prepared.method),
+        }
+    })?;
 
-    let mut request_builder = client.request(method.clone(), &url_resolved);
+    let mut request_builder = client.request(method.clone(), &prepared.url_resolved);
 
-    for (k, v) in &resolved_headers {
+    for (k, v) in &prepared.headers_resolved {
         request_builder = request_builder.header(k.as_str(), v.as_str());
     }
 
-    if !resolved_query.is_empty() {
-        request_builder = request_builder.query(&resolved_query);
+    if !prepared.query_resolved.is_empty() {
+        request_builder = request_builder.query(&prepared.query_resolved);
     }
 
     // Auth
-    match req.auth.auth_type.as_str() {
+    match prepared.auth_type.as_str() {
         "bearer" => {
-            if let Some(token) = &resolved_auth_token {
+            if let Some(token) = &prepared.auth_token {
                 request_builder =
                     request_builder.header("Authorization", format!("Bearer {}", token));
             }
         }
         "basic" => {
-            if let (Some(user), pass) = (&req.auth.username, &resolved_auth_password) {
+            if let (Some(user), pass) = (&prepared.auth_username, &prepared.auth_password) {
                 request_builder =
                     request_builder.basic_auth(user, pass.as_ref().map(|s| s.as_str()));
             }
         }
         "apikey" => {
-            if let (Some(key), Some(val)) = (&req.auth.key, &resolved_auth_value) {
-                let location = req.auth.location.as_deref().unwrap_or("header");
+            if let (Some(key), Some(val)) = (&prepared.auth_key, &prepared.auth_value) {
+                let location = prepared.auth_location.as_deref().unwrap_or("header");
                 if location == "header" {
                     request_builder = request_builder.header(key.as_str(), val.as_str());
                 }
-                // "query" location handled by appending to query params
                 if location == "query" {
                     request_builder = request_builder.query(&[(key.as_str(), val.as_str())]);
                 }
@@ -353,46 +451,74 @@ pub async fn execute_send(
     }
 
     // Body
-    if let Some(body_content) = resolved_body {
-        match req.body.body_type.as_str() {
-            "json" => {
+    match prepared.body_type.as_str() {
+        "json" => {
+            if let Some(body_content) = &prepared.body_resolved {
                 request_builder = request_builder
                     .header("Content-Type", "application/json")
-                    .body(body_content);
+                    .body(body_content.clone());
             }
-            "raw" => {
-                if let Some(ct) = &req.body.content_type {
+        }
+        "raw" => {
+            if let Some(body_content) = &prepared.body_resolved {
+                if let Some(ct) = &prepared.body_content_type {
                     request_builder = request_builder.header("Content-Type", ct.as_str());
                 }
-                request_builder = request_builder.body(body_content);
-            }
-            "form" => {
-                // form-urlencoded from fields
-                let mut form_data = Vec::new();
-                for field in &req.body.fields {
-                    if field.enabled {
-                        let fv = resolve_all_vars(&field.value, &env_ctx)?;
-                        form_data.push((field.name.clone(), fv));
-                    }
-                }
-                request_builder = request_builder.form(&form_data);
-            }
-            _ => {
-                request_builder = request_builder.body(body_content);
+                request_builder = request_builder.body(body_content.clone());
             }
         }
-    } else if req.body.body_type == "form" && !req.body.fields.is_empty() {
-        let mut form_data = Vec::new();
-        for field in &req.body.fields {
-            if field.enabled {
-                let fv = resolve_all_vars(&field.value, &env_ctx)?;
-                form_data.push((field.name.clone(), fv));
+        "form" => {
+            if !prepared.fields.is_empty() {
+                request_builder = request_builder.form(&prepared.fields);
             }
         }
-        request_builder = request_builder.form(&form_data);
+        _ => {
+            if let Some(body_content) = &prepared.body_resolved {
+                request_builder = request_builder.body(body_content.clone());
+            }
+        }
     }
 
-    // 7. Execute with timing
+    // Execute with timing — wrapped to guarantee cancel-map cleanup
+    let result = perform_inner(
+        request_id,
+        request_builder,
+        &mut cancel_rx,
+        &method,
+        &prepared.url_redacted,
+    )
+    .await;
+
+    // Always cleanup cancel token, regardless of success or error
+    cleanup_cancel(request_id).await;
+
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Convenience: prepare + perform in one call (used by tests)
+// ---------------------------------------------------------------------------
+
+pub async fn execute_send(
+    workspace_path: &str,
+    request_path: &str,
+    env_name: Option<&str>,
+) -> Result<SendResponse, ApiClientError> {
+    let prepared = prepare(workspace_path, request_path, env_name).await?;
+    perform(&prepared).await
+}
+
+// ---------------------------------------------------------------------------
+// Inner perform — separated so the caller can guarantee cleanup
+// ---------------------------------------------------------------------------
+
+async fn perform_inner(
+    request_id: &str,
+    request_builder: reqwest::RequestBuilder,
+    cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    method: &reqwest::Method,
+    url_redacted: &str,
+) -> Result<SendResponse, ApiClientError> {
     let start = Instant::now();
 
     let response = tokio::select! {
@@ -405,9 +531,8 @@ pub async fn execute_send(
                 }
             })?
         }
-        _ = wait_for_cancel(&mut cancel_rx) => {
-            cleanup_cancel(&request_id).await;
-            return Err(ApiClientError::Cancelled(request_id));
+        _ = wait_for_cancel(cancel_rx) => {
+            return Err(ApiClientError::Cancelled(request_id.to_string()));
         }
     };
 
@@ -432,12 +557,10 @@ pub async fn execute_send(
         .cloned()
         .unwrap_or_default();
 
-    // Stream body with cap
     let body_bytes = tokio::select! {
         res = read_body_capped(response) => res?,
-        _ = wait_for_cancel(&mut cancel_rx) => {
-            cleanup_cancel(&request_id).await;
-            return Err(ApiClientError::Cancelled(request_id));
+        _ = wait_for_cancel(cancel_rx) => {
+            return Err(ApiClientError::Cancelled(request_id.to_string()));
         }
     };
 
@@ -447,7 +570,6 @@ pub async fn execute_send(
     let body_size = body_bytes.len();
     let truncated = body_size >= MAX_BODY_BYTES;
 
-    // Binary detection: content-type heuristic + UTF-8 validity
     let is_binary = is_binary_content(&content_type, &body_bytes);
     let body_string = if is_binary {
         use base64::Engine;
@@ -456,11 +578,8 @@ pub async fn execute_send(
         String::from_utf8_lossy(&body_bytes).into_owned()
     };
 
-    // Cleanup cancel token
-    cleanup_cancel(&request_id).await;
-
     Ok(SendResponse {
-        request_id,
+        request_id: request_id.to_string(),
         status,
         status_text,
         headers: resp_headers,
@@ -476,10 +595,14 @@ pub async fn execute_send(
             tls_ms: 0,
             download_ms,
         },
-        url_resolved: url_redacted,
+        url_resolved: url_redacted.to_string(),
         method: method.to_string(),
     })
 }
+
+// ---------------------------------------------------------------------------
+// Body reading and binary detection
+// ---------------------------------------------------------------------------
 
 async fn read_body_capped(response: reqwest::Response) -> Result<Vec<u8>, ApiClientError> {
     let mut bytes = Vec::new();
@@ -504,7 +627,6 @@ async fn read_body_capped(response: reqwest::Response) -> Result<Vec<u8>, ApiCli
 
 fn is_binary_content(content_type: &str, body: &[u8]) -> bool {
     let ct_lower = content_type.to_lowercase();
-    // Text-like content types
     if ct_lower.contains("text/")
         || ct_lower.contains("json")
         || ct_lower.contains("xml")
@@ -516,7 +638,6 @@ fn is_binary_content(content_type: &str, body: &[u8]) -> bool {
     {
         return false;
     }
-    // If content-type suggests binary
     if ct_lower.contains("octet-stream")
         || ct_lower.contains("image/")
         || ct_lower.contains("audio/")
@@ -526,9 +647,12 @@ fn is_binary_content(content_type: &str, body: &[u8]) -> bool {
     {
         return true;
     }
-    // Fallback: check if valid UTF-8
     std::str::from_utf8(body).is_err()
 }
+
+// ---------------------------------------------------------------------------
+// Cancellation helpers
+// ---------------------------------------------------------------------------
 
 async fn wait_for_cancel(rx: &mut tokio::sync::watch::Receiver<bool>) {
     loop {
