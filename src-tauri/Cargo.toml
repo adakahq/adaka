@@ -15,12 +15,22 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml_edit = { version = "0.22", features = ["serde"] }
 rand = "0.9"
 thiserror = "2"
 tauri-plugin-dialog = "2.7.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip"] }
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+hyper = "1"
+tower = "0.5"

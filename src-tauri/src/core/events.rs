@@ -43,7 +43,11 @@ pub enum EventBusError {
 
 impl Serialize for EventBusError {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&self.to_string())
+        use serde::ser::SerializeStruct;
+        let mut st = s.serialize_struct("EventBusError", 2)?;
+        st.serialize_field("code", "UNKNOWN_TOPIC")?;
+        st.serialize_field("message", &self.to_string())?;
+        st.end()
     }
 }
 
@@ -61,6 +65,12 @@ struct BusInner {
 
 pub struct EventBus {
     inner: Mutex<BusInner>,
+}
+
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventBus {

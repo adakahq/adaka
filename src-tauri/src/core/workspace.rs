@@ -64,11 +64,26 @@ pub enum WorkspaceError {
     Io(#[from] std::io::Error),
 }
 
-// Tauri commands need the error to implement `Into<tauri::ipc::InvokeError>`.
-// The simplest correct way is to serialize it as a string.
+impl WorkspaceError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::DirNotFound(_) => "DIR_NOT_FOUND",
+            Self::NotInitialised => "NOT_INITIALISED",
+            Self::AlreadyExists(_) => "ALREADY_EXISTS",
+            Self::PathTraversal(_) => "PATH_TRAVERSAL",
+            Self::TomlParse(_) => "PARSE",
+            Self::Io(_) => "IO",
+        }
+    }
+}
+
 impl Serialize for WorkspaceError {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&self.to_string())
+        use serde::ser::SerializeStruct;
+        let mut st = s.serialize_struct("WorkspaceError", 2)?;
+        st.serialize_field("code", self.code())?;
+        st.serialize_field("message", &self.to_string())?;
+        st.end()
     }
 }
 

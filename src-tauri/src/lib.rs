@@ -1,8 +1,47 @@
-mod core;
+pub mod core;
+pub mod modules;
 
 use tauri::Manager;
 
 use core::{env, events, prefs, workspace};
+use modules::api_client;
+
+/// Test helpers exposed for integration tests.
+#[doc(hidden)]
+pub mod test_helpers {
+    use std::path::Path;
+
+    use crate::core::workspace;
+    use crate::modules::api_client::{send, ApiClientError};
+
+    pub fn create_workspace(root: &Path) {
+        workspace::create(root, Some("Test")).unwrap();
+    }
+
+    pub fn write_workspace_file(root: &Path, relative: &str, content: &str) {
+        workspace::write_file(root, relative, content).unwrap();
+    }
+
+    pub async fn execute_send(
+        workspace_path: &str,
+        request_path: &str,
+        env_name: Option<&str>,
+    ) -> Result<send::SendResponse, ApiClientError> {
+        send::execute_send(workspace_path, request_path, env_name).await
+    }
+
+    pub async fn cancel_all_pending() {
+        send::cancel_all_pending().await;
+    }
+
+    pub async fn pending_request_ids() -> Vec<String> {
+        send::pending_request_ids().await
+    }
+
+    pub async fn cancel_request(request_id: &str) -> Result<(), ApiClientError> {
+        send::cancel_request(request_id).await
+    }
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -28,6 +67,13 @@ pub fn run() {
             events::core_recent_events,
             prefs::core_get_pref,
             prefs::core_set_pref,
+            api_client::api_parse_request,
+            api_client::api_parse_collection,
+            api_client::api_resolve_request,
+            api_client::api_send_request,
+            api_client::api_cancel_request,
+            api_client::api_history_list,
+            api_client::api_history_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Adaka");
