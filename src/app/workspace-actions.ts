@@ -4,6 +4,21 @@ import { getModules, type WorkspaceInfo } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { buildAllModuleContexts } from "./module-context";
 
+interface StructuredError {
+  code: string;
+  message: string;
+}
+
+function isStructuredError(e: unknown): e is StructuredError {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    "message" in e &&
+    typeof (e as StructuredError).code === "string"
+  );
+}
+
 async function notifyModules(ws: WorkspaceInfo): Promise<void> {
   const ctxs = buildAllModuleContexts(ws);
   useShellStore.getState().setModuleContexts(ctxs);
@@ -37,8 +52,7 @@ export async function openWorkspace(): Promise<void> {
   try {
     await finalizeOpen(selected);
   } catch (err: unknown) {
-    const msg = String(err);
-    if (msg.includes("workspace not initialised")) {
+    if (isStructuredError(err) && err.code === "NOT_INITIALISED") {
       useShellStore.getState().showConfirm({
         title: "No Adaka workspace in this folder",
         detail: selected,
@@ -46,11 +60,13 @@ export async function openWorkspace(): Promise<void> {
         onConfirm: () => {
           useShellStore.getState().dismissConfirm();
           void finalizeCreate(selected).catch((e: unknown) => {
-            useShellStore.getState().addToast(String(e), "error");
+            const msg = isStructuredError(e) ? e.message : String(e);
+            useShellStore.getState().addToast(msg, "error");
           });
         },
       });
     } else {
+      const msg = isStructuredError(err) ? err.message : String(err);
       useShellStore.getState().addToast(msg, "error");
     }
   }
@@ -63,8 +79,7 @@ export async function createWorkspace(): Promise<void> {
   try {
     await finalizeCreate(selected);
   } catch (err: unknown) {
-    const msg = String(err);
-    if (msg.includes("workspace already exists")) {
+    if (isStructuredError(err) && err.code === "ALREADY_EXISTS") {
       useShellStore.getState().showConfirm({
         title: "Workspace already exists in this folder",
         detail: selected,
@@ -72,12 +87,16 @@ export async function createWorkspace(): Promise<void> {
         onConfirm: () => {
           useShellStore.getState().dismissConfirm();
           void finalizeOpen(selected).catch((e: unknown) => {
-            useShellStore.getState().addToast(String(e), "error");
+            const msg = isStructuredError(e) ? e.message : String(e);
+            useShellStore.getState().addToast(msg, "error");
           });
         },
       });
     } else {
+      const msg = isStructuredError(err) ? err.message : String(err);
       useShellStore.getState().addToast(msg, "error");
     }
   }
 }
+
+export { isStructuredError, type StructuredError };
