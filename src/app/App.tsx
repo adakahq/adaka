@@ -11,6 +11,7 @@ import { ConfirmPanel } from "./ConfirmPanel";
 import { getPref, setPref } from "../shared/prefs";
 import type { Theme } from "./store";
 
+import "../modules/api-client";
 import "../modules/utilities";
 
 const queryClient = new QueryClient({
