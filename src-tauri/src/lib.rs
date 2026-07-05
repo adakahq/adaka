@@ -3,7 +3,7 @@ pub mod modules;
 
 use tauri::Manager;
 
-use core::{env, events, prefs, workspace};
+use core::{env, events, prefs, requests, workspace};
 use modules::api_client;
 
 /// Test helpers exposed for integration tests.
@@ -91,6 +91,7 @@ pub fn run() {
             events::core_recent_events,
             prefs::core_get_pref,
             prefs::core_set_pref,
+            requests::api_list_requests,
             api_client::api_parse_request,
             api_client::api_parse_collection,
             api_client::api_resolve_request,
