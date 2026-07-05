@@ -2,7 +2,7 @@ mod core;
 
 use tauri::Manager;
 
-use core::{env, events, prefs, workspace};
+use core::{env, events, prefs, requests, workspace};
 
 pub fn run() {
     tauri::Builder::default()
@@ -28,6 +28,7 @@ pub fn run() {
             events::core_recent_events,
             prefs::core_get_pref,
             prefs::core_set_pref,
+            requests::api_list_requests,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Adaka");
