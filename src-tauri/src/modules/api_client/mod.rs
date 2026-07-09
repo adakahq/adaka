@@ -2,6 +2,7 @@ pub mod format;
 pub mod history;
 pub mod inheritance;
 pub mod send;
+pub mod tree;
 
 use crate::core::{env, workspace};
 
@@ -62,6 +63,14 @@ impl serde::Serialize for ApiClientError {
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn api_list_requests(
+    workspace_path: String,
+) -> Result<Vec<tree::TreeNode>, workspace::WorkspaceError> {
+    let root = std::path::Path::new(&workspace_path);
+    tree::list_requests(root)
+}
 
 #[tauri::command]
 pub fn api_parse_request(
