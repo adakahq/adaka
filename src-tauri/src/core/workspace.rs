@@ -147,6 +147,20 @@ pub fn create(root: &Path, name: Option<&str>) -> Result<WorkspaceInfo, Workspac
 
     atomic_write(&ws_path, &doc.to_string())?;
 
+    // Seed a starter environment so the default "local" env works immediately.
+    let env_path = adaka_dir.join("environments").join("local.toml");
+    fs::create_dir_all(env_path.parent().unwrap())?;
+    atomic_write(
+        &env_path,
+        concat!(
+            "# Variables for this environment — use {{BASE_URL}} in requests\n",
+            "version = 1\n",
+            "\n",
+            "[vars]\n",
+            "BASE_URL = \"http://localhost:3000\"\n",
+        ),
+    )?;
+
     Ok(WorkspaceInfo {
         id,
         name: resolved_name,
@@ -180,6 +194,13 @@ pub fn write_file(root: &Path, relative: &str, content: &str) -> Result<(), Work
         fs::create_dir_all(parent)?;
     }
     atomic_write(&resolved, content)
+}
+
+/// Delete a file scoped to `.adaka/`. Path traversal checked.
+pub fn delete_file(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
+    let resolved = resolve_scoped_path(root, relative)?;
+    fs::remove_file(resolved)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +395,11 @@ pub fn workspace_write_file(
     content: String,
 ) -> Result<(), WorkspaceError> {
     write_file(Path::new(&path), &relative, &content)
+}
+
+#[tauri::command]
+pub fn workspace_delete_file(path: String, relative: String) -> Result<(), WorkspaceError> {
+    delete_file(Path::new(&path), &relative)
 }
 
 // ---------------------------------------------------------------------------
@@ -581,8 +607,7 @@ mod tests {
         let root = tmp_root();
         create(root.path(), Some("Deep Write")).unwrap();
 
-        let content =
-            "version = 1\nname = \"deep\"\nmethod = \"GET\"\nurl = \"\"\n";
+        let content = "version = 1\nname = \"deep\"\nmethod = \"GET\"\nurl = \"\"\n";
         write_file(
             root.path(),
             "requests/new-folder/deep/file.req.toml",
@@ -590,9 +615,7 @@ mod tests {
         )
         .unwrap();
 
-        let read_back =
-            read_file(root.path(), "requests/new-folder/deep/file.req.toml")
-                .unwrap();
+        let read_back = read_file(root.path(), "requests/new-folder/deep/file.req.toml").unwrap();
         assert_eq!(read_back, content);
     }
 
@@ -601,12 +624,49 @@ mod tests {
         let root = tmp_root();
         create(root.path(), Some("Traversal Dirs")).unwrap();
 
-        let err = write_file(
-            root.path(),
-            "requests/../../etc/evil.toml",
-            "version = 1\n",
-        )
-        .unwrap_err();
+        let err =
+            write_file(root.path(), "requests/../../etc/evil.toml", "version = 1\n").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    fn create_seeds_local_environment() {
+        let root = tmp_root();
+        create(root.path(), Some("Seed Test")).unwrap();
+
+        let content = read_file(root.path(), "environments/local.toml").unwrap();
+        assert!(content.contains("[vars]"));
+        assert!(content.contains("BASE_URL"));
+    }
+
+    #[test]
+    fn delete_file_removes_existing() {
+        let root = tmp_root();
+        create(root.path(), Some("Delete Test")).unwrap();
+
+        let content = "version = 1\nname = \"doomed\"\nmethod = \"GET\"\nurl = \"\"\n";
+        write_file(root.path(), "requests/doomed.req.toml", content).unwrap();
+
+        // File exists
+        assert!(read_file(root.path(), "requests/doomed.req.toml").is_ok());
+
+        // Delete it
+        delete_file(root.path(), "requests/doomed.req.toml").unwrap();
+
+        // File is gone
+        let err = read_file(root.path(), "requests/doomed.req.toml").unwrap_err();
+        assert!(matches!(err, WorkspaceError::Io(_)));
+    }
+
+    #[test]
+    fn delete_file_rejects_traversal() {
+        let root = tmp_root();
+        create(root.path(), Some("Delete Traversal")).unwrap();
+
+        let err = delete_file(root.path(), "../etc/passwd").unwrap_err();
         assert!(
             matches!(err, WorkspaceError::PathTraversal(_)),
             "expected PathTraversal, got: {err}"

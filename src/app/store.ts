@@ -21,6 +21,7 @@ export interface ConfirmPanel {
   detail: string;
   confirmLabel: string;
   onConfirm: () => void;
+  destructive?: boolean;
 }
 
 let toastSeq = 0;

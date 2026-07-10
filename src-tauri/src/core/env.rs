@@ -373,10 +373,10 @@ mod tests {
     }
 
     #[test]
-    fn list_environments_empty_when_no_dir() {
+    fn fresh_workspace_has_seeded_local_env() {
         let root = tmp_workspace();
         let names = list_environments(root.path()).unwrap();
-        assert!(names.is_empty());
+        assert_eq!(names, vec!["local"]);
     }
 
     #[test]

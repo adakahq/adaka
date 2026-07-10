@@ -9,7 +9,13 @@ export function EnvSwitcher() {
   useEffect(() => {
     void ctx
       .invoke<string[]>("env_list", { path: ctx.workspace.root })
-      .then(setEnvs)
+      .then((list) => {
+        setEnvs(list);
+        const current = ctx.env.active();
+        if (current && !list.includes(current)) {
+          setActive("");
+        }
+      })
       .catch(() => setEnvs([]));
   }, [ctx]);
 
@@ -17,7 +23,6 @@ export function EnvSwitcher() {
     async (e: React.ChangeEvent<HTMLSelectElement>) => {
       const name = e.target.value;
       setActive(name);
-      // Persist via prefs
       try {
         await ctx.invoke("core_set_pref", {
           key: `activeEnv:${ctx.workspace.id}`,

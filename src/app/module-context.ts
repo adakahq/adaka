@@ -46,6 +46,8 @@ export function buildModuleContext(
           routePath: route,
         });
       },
+      confirm: (options) => useShellStore.getState().showConfirm(options),
+      dismissConfirm: () => useShellStore.getState().dismissConfirm(),
     },
   };
 }

@@ -29,7 +29,11 @@ export function ConfirmPanel() {
             Cancel
           </button>
           <button
-            className="rounded bg-adaka-gold px-3 py-1.5 text-xs font-medium text-adaka-on-gold hover:brightness-110"
+            className={`rounded px-3 py-1.5 text-xs font-medium hover:brightness-110 ${
+              confirm.destructive
+                ? "bg-red-600 text-white"
+                : "bg-adaka-gold text-adaka-on-gold"
+            }`}
             onClick={confirm.onConfirm}
             autoFocus
           >

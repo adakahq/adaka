@@ -37,6 +37,14 @@ export interface ModuleToggles {
 
 export type ToastKind = "info" | "error";
 
+export interface ConfirmOptions {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+}
+
 export interface ModuleContext {
   workspace: WorkspaceInfo;
   env: {
@@ -51,6 +59,8 @@ export interface ModuleContext {
   ui: {
     toast(msg: string, kind?: ToastKind): void;
     openTab(route: string): void;
+    confirm(options: ConfirmOptions): void;
+    dismissConfirm(): void;
   };
 }
 
