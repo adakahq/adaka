@@ -795,3 +795,34 @@ timeout_ms = 30000
     let pending = adaka_lib::test_helpers::pending_request_ids().await;
     assert!(pending.is_empty(), "cancel map not empty after cancel");
 }
+
+// Live-internet test — run locally via `cargo test -- --ignored`, not in CI.
+#[tokio::test]
+#[ignore]
+async fn live_httpbin_roundtrip() {
+    let _guard = TEST_LOCK.lock().await;
+    let tmp = tempfile::tempdir().unwrap();
+    setup_workspace(&tmp);
+    write_file(
+        &tmp,
+        "requests/httpbin.req.toml",
+        "version = 1\nname = \"httpbin\"\nmethod = \"GET\"\nurl = \"https://httpbin.org/get\"\n",
+    );
+
+    let resp = adaka_lib::test_helpers::execute_send(
+        tmp.path().to_str().unwrap(),
+        "requests/httpbin.req.toml",
+        None,
+    )
+    .await
+    .unwrap();
+
+    eprintln!(
+        "LIVE: {} {} — {}ms",
+        resp.status, resp.status_text, resp.timing.total_ms
+    );
+    assert_eq!(resp.status, 200);
+    assert_eq!(resp.status_text, "OK");
+    assert!(resp.body.contains("httpbin.org"));
+    assert!(resp.timing.total_ms > 0);
+}

@@ -6,7 +6,7 @@ import { CollectionTree } from "./components/CollectionTree";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
-import type { TreeNode, RequestFile, SendResponse, StructuredError } from "./types";
+import type { TreeNode, SendResponse, StructuredError, RequestFile } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
@@ -41,11 +41,10 @@ export function ApiClientRoute() {
   const loadRequest = useCallback(
     async (path: string) => {
       try {
-        const raw = await ctx.invoke<string>("workspace_read_file", {
-          path: ctx.workspace.root,
-          relative: path,
+        const parsed = await ctx.invoke<RequestFile>("api_parse_request", {
+          workspacePath: ctx.workspace.root,
+          requestPath: path,
         });
-        const parsed = parseRequestToml(raw, path);
         setActiveRequest(parsed);
         setActiveRequestPath(path);
         setResponse(null);
@@ -175,87 +174,6 @@ export function ApiClientRoute() {
   );
 }
 
-function parseRequestToml(raw: string, path: string): RequestFile {
-  const lines = raw.split("\n");
-  const result: RequestFile = {
-    version: 1,
-    name: fileNameFromPath(path),
-    method: "GET",
-    url: "",
-    headers: {},
-    headers_disabled: {},
-    query: {},
-    query_disabled: {},
-    auth: { type: "inherit" },
-    body: { type: "none" },
-    settings: { timeout_ms: 30000, follow_redirects: true, verify_tls: true },
-    tests: {},
-  };
-
-  let section = "";
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      section = trimmed.slice(1, -1);
-      continue;
-    }
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    let value = trimmed.slice(eqIdx + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (value === "'''" || value === '"""') {
-      value = "";
-      continue;
-    }
-
-    if (section === "") {
-      if (key === "version") result.version = parseInt(value) || 1;
-      else if (key === "name") result.name = value;
-      else if (key === "method") result.method = value.toUpperCase();
-      else if (key === "url") result.url = value;
-    } else if (section === "headers") {
-      result.headers[key] = value;
-    } else if (section === "headers_disabled") {
-      result.headers_disabled[key] = value;
-    } else if (section === "query") {
-      result.query[key] = value;
-    } else if (section === "query_disabled") {
-      result.query_disabled[key] = value;
-    } else if (section === "auth") {
-      if (key === "type") result.auth.type = value;
-      else if (key === "token") result.auth.token = value;
-      else if (key === "username") result.auth.username = value;
-      else if (key === "password") result.auth.password = value;
-      else if (key === "key") result.auth.key = value;
-      else if (key === "value") result.auth.value = value;
-      else if (key === "in") result.auth.in = value;
-    } else if (section === "body") {
-      if (key === "type") result.body.type = value;
-      else if (key === "content") result.body.content = value;
-      else if (key === "content_type") result.body.content_type = value;
-    } else if (section === "settings") {
-      if (key === "timeout_ms")
-        result.settings.timeout_ms = parseInt(value) || 30000;
-      else if (key === "follow_redirects")
-        result.settings.follow_redirects = value === "true";
-      else if (key === "verify_tls")
-        result.settings.verify_tls = value === "true";
-    } else if (section === "tests") {
-      if (key === "status") result.tests.status = parseInt(value) || undefined;
-    }
-  }
-
-  return result;
-}
-
 function serializeRequestToml(req: RequestFile): string {
   const lines: string[] = [];
   lines.push(`version = ${req.version}`);
@@ -328,10 +246,4 @@ function serializeRequestToml(req: RequestFile): string {
   }
 
   return lines.join("\n") + "\n";
-}
-
-function fileNameFromPath(path: string): string {
-  const parts = path.split("/");
-  const fname = parts[parts.length - 1] ?? "unnamed";
-  return fname.replace(".req.toml", "");
 }

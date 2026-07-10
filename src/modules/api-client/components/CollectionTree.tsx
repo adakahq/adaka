@@ -138,6 +138,9 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
           {node.method.slice(0, 3)}
         </span>
         <span className="truncate text-adaka-text">{node.name}</span>
+        {node.parse_error && (
+          <span className="ml-auto text-[10px] text-red-400" title={node.parse_error}>!</span>
+        )}
       </button>
     );
   };

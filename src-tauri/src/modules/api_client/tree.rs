@@ -2,10 +2,13 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::workspace::WorkspaceError;
+use crate::core::workspace::{self, WorkspaceError};
+
+use super::format;
+use super::inheritance::resolve_order;
 
 // ---------------------------------------------------------------------------
-// Request tree types
+// Tree node types
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -22,6 +25,8 @@ pub enum TreeNode {
         name: String,
         path: String,
         method: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parse_error: Option<String>,
     },
 }
 
@@ -40,10 +45,14 @@ pub fn list_requests(root: &Path) -> Result<Vec<TreeNode>, WorkspaceError> {
     if !requests_dir.is_dir() {
         return Ok(Vec::new());
     }
-    build_tree(&requests_dir, "requests")
+    build_tree(root, &requests_dir, "requests")
 }
 
-fn build_tree(dir: &Path, relative_prefix: &str) -> Result<Vec<TreeNode>, WorkspaceError> {
+fn build_tree(
+    root: &Path,
+    dir: &Path,
+    relative_prefix: &str,
+) -> Result<Vec<TreeNode>, WorkspaceError> {
     let mut folders: Vec<TreeNode> = Vec::new();
     let mut requests: Vec<TreeNode> = Vec::new();
 
@@ -60,132 +69,94 @@ fn build_tree(dir: &Path, relative_prefix: &str) -> Result<Vec<TreeNode>, Worksp
         let relative_path = format!("{}/{}", relative_prefix, file_name);
 
         if file_type.is_dir() {
-            let children = build_tree(&entry.path(), &relative_path)?;
+            let children = build_tree(root, &entry.path(), &relative_path)?;
             folders.push(TreeNode::Folder {
                 name: file_name,
                 path: relative_path,
                 children,
             });
         } else if file_name.ends_with(".req.toml") {
-            let (name, method) = parse_request_meta(&entry.path());
-            requests.push(TreeNode::Request {
-                name,
-                path: relative_path,
-                method,
-            });
+            let node = parse_request_node(root, &relative_path, &file_name);
+            requests.push(node);
         }
     }
 
-    // Apply collection.toml ordering if present
-    let collection_path = dir.join("collection.toml");
-    let order = if collection_path.is_file() {
-        parse_collection_order(&collection_path)
-    } else {
-        Vec::new()
-    };
+    // Read collection.toml ordering via format::parse_collection
+    let order = read_collection_order(root, relative_prefix);
 
-    let mut result = merge_with_order(folders, requests, &order);
-    // Stable sort: ordered items first by order index, unordered items alphabetically after
-    result.sort_by(|a, b| {
-        let a_idx = order_index(&order, node_slug(a));
-        let b_idx = order_index(&order, node_slug(b));
-        match (a_idx, b_idx) {
-            (Some(ai), Some(bi)) => ai.cmp(&bi),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => node_slug(a).cmp(node_slug(b)),
-        }
-    });
+    // Collect slugs for resolve_order
+    let all_slugs: Vec<String> = folders
+        .iter()
+        .chain(requests.iter())
+        .map(|n| node_slug(n).to_string())
+        .collect();
 
-    Ok(result)
-}
+    let ordered_slugs = resolve_order(&order, &all_slugs);
 
-fn merge_with_order(
-    folders: Vec<TreeNode>,
-    requests: Vec<TreeNode>,
-    _order: &[String],
-) -> Vec<TreeNode> {
-    let mut all = Vec::with_capacity(folders.len() + requests.len());
+    // Build a combined vec and sort by the resolved order
+    let mut all: Vec<TreeNode> = Vec::with_capacity(folders.len() + requests.len());
     all.extend(folders);
     all.extend(requests);
-    all
+
+    all.sort_by_key(|n| {
+        ordered_slugs
+            .iter()
+            .position(|s| s == node_slug(n))
+            .unwrap_or(usize::MAX)
+    });
+
+    Ok(all)
+}
+
+/// Parse a request file, returning a TreeNode. Broken files get an error badge
+/// instead of silently defaulting to GET.
+fn parse_request_node(root: &Path, relative_path: &str, file_name: &str) -> TreeNode {
+    let slug = file_name.strip_suffix(".req.toml").unwrap_or(file_name);
+
+    match workspace::read_file(root, relative_path) {
+        Ok(raw) => match format::parse_request(&raw, relative_path) {
+            Ok(req) => TreeNode::Request {
+                name: req.name,
+                path: relative_path.to_string(),
+                method: req.method,
+                parse_error: None,
+            },
+            Err(detail) => TreeNode::Request {
+                name: slug.to_string(),
+                path: relative_path.to_string(),
+                method: "GET".to_string(),
+                parse_error: Some(detail),
+            },
+        },
+        Err(e) => TreeNode::Request {
+            name: slug.to_string(),
+            path: relative_path.to_string(),
+            method: "GET".to_string(),
+            parse_error: Some(e.to_string()),
+        },
+    }
+}
+
+fn read_collection_order(root: &Path, folder_relative: &str) -> Vec<String> {
+    let collection_path = format!("{}/collection.toml", folder_relative);
+    let raw = match workspace::read_file(root, &collection_path) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+    match format::parse_collection(&raw, &collection_path) {
+        Ok(config) => config.order,
+        Err(_) => Vec::new(),
+    }
 }
 
 fn node_slug(node: &TreeNode) -> &str {
     match node {
         TreeNode::Folder { name, .. } => name,
         TreeNode::Request { path, .. } => {
-            // Slug is the filename without .req.toml
             let fname = path.rsplit('/').next().unwrap_or(path);
             fname.strip_suffix(".req.toml").unwrap_or(fname)
         }
     }
-}
-
-fn order_index(order: &[String], slug: &str) -> Option<usize> {
-    order.iter().position(|s| s == slug)
-}
-
-fn parse_collection_order(path: &Path) -> Vec<String> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return Vec::new(),
-    };
-    let doc: toml_edit::DocumentMut = match content.parse() {
-        Ok(d) => d,
-        Err(_) => return Vec::new(),
-    };
-    let Some(arr) = doc.get("order").and_then(|v| v.as_array()) else {
-        return Vec::new();
-    };
-    arr.iter()
-        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-        .collect()
-}
-
-fn parse_request_meta(path: &Path) -> (String, String) {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return (slug_from_path(path), "GET".to_string()),
-    };
-    let doc: toml_edit::DocumentMut = match content.parse() {
-        Ok(d) => d,
-        Err(_) => return (slug_from_path(path), "GET".to_string()),
-    };
-    let name = doc
-        .get("name")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| slug_from_path(path));
-    let method = doc
-        .get("method")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_uppercase())
-        .unwrap_or_else(|| "GET".to_string());
-    (name, method)
-}
-
-fn slug_from_path(path: &Path) -> String {
-    path.file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unnamed")
-        .strip_suffix(".req")
-        .unwrap_or(
-            path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unnamed"),
-        )
-        .to_string()
-}
-
-// ---------------------------------------------------------------------------
-// Tauri command
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-pub fn api_list_requests(workspace_path: String) -> Result<Vec<TreeNode>, WorkspaceError> {
-    let root = Path::new(&workspace_path);
-    list_requests(root)
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +166,6 @@ pub fn api_list_requests(workspace_path: String) -> Result<Vec<TreeNode>, Worksp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::workspace;
 
     fn setup_workspace(tmp: &tempfile::TempDir) {
         workspace::create(tmp.path(), Some("Test")).unwrap();
@@ -226,10 +196,16 @@ mod tests {
         let result = list_requests(tmp.path()).unwrap();
         assert_eq!(result.len(), 1);
         match &result[0] {
-            TreeNode::Request { name, method, path } => {
+            TreeNode::Request {
+                name,
+                method,
+                path,
+                parse_error,
+            } => {
                 assert_eq!(name, "Get Users");
                 assert_eq!(method, "GET");
                 assert_eq!(path, "requests/get-users.req.toml");
+                assert!(parse_error.is_none());
             }
             _ => panic!("expected Request node"),
         }
@@ -262,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn collection_toml_ordering() {
+    fn collection_toml_ordering_applied() {
         let tmp = tempfile::tempdir().unwrap();
         setup_workspace(&tmp);
         write_file(
@@ -283,15 +259,8 @@ mod tests {
 
         let result = list_requests(tmp.path()).unwrap();
         assert_eq!(result.len(), 2);
-        // b-second should come first per collection.toml
-        match &result[0] {
-            TreeNode::Request { name, .. } => assert_eq!(name, "B Second"),
-            _ => panic!("expected Request"),
-        }
-        match &result[1] {
-            TreeNode::Request { name, .. } => assert_eq!(name, "A First"),
-            _ => panic!("expected Request"),
-        }
+        assert_eq!(node_slug(&result[0]), "b-second");
+        assert_eq!(node_slug(&result[1]), "a-first");
     }
 
     #[test]
@@ -321,7 +290,6 @@ mod tests {
 
         let result = list_requests(tmp.path()).unwrap();
         assert_eq!(result.len(), 3);
-        // m-ordered first (it's in the order list), then a-first, z-last alphabetically
         assert_eq!(node_slug(&result[0]), "m-ordered");
         assert_eq!(node_slug(&result[1]), "a-first");
         assert_eq!(node_slug(&result[2]), "z-last");
@@ -335,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn method_defaults_to_get_on_parse_error() {
+    fn broken_toml_surfaces_parse_error() {
         let tmp = tempfile::tempdir().unwrap();
         setup_workspace(&tmp);
         // Write invalid TOML directly (workspace::write_file rejects invalid TOML)
@@ -350,8 +318,89 @@ mod tests {
         let result = list_requests(tmp.path()).unwrap();
         assert_eq!(result.len(), 1);
         match &result[0] {
-            TreeNode::Request { method, .. } => assert_eq!(method, "GET"),
+            TreeNode::Request {
+                name, parse_error, ..
+            } => {
+                assert_eq!(name, "broken");
+                assert!(parse_error.is_some(), "expected parse_error to be set");
+            }
             _ => panic!("expected Request"),
         }
+    }
+
+    #[test]
+    fn empty_folder_appears_in_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        setup_workspace(&tmp);
+        // Create an empty folder with just a collection.toml
+        write_file(
+            &tmp,
+            "requests/empty-group/collection.toml",
+            "version = 1\norder = []\n",
+        );
+
+        let result = list_requests(tmp.path()).unwrap();
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            TreeNode::Folder { name, children, .. } => {
+                assert_eq!(name, "empty-group");
+                assert!(children.is_empty());
+            }
+            _ => panic!("expected Folder node"),
+        }
+    }
+
+    #[test]
+    fn unlisted_files_come_after_ordered_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        setup_workspace(&tmp);
+        write_file(
+            &tmp,
+            "requests/delta.req.toml",
+            "version = 1\nname = \"Delta\"\nmethod = \"DELETE\"\nurl = \"http://x.com\"\n",
+        );
+        write_file(
+            &tmp,
+            "requests/alpha.req.toml",
+            "version = 1\nname = \"Alpha\"\nmethod = \"GET\"\nurl = \"http://x.com\"\n",
+        );
+        write_file(
+            &tmp,
+            "requests/charlie.req.toml",
+            "version = 1\nname = \"Charlie\"\nmethod = \"PUT\"\nurl = \"http://x.com\"\n",
+        );
+        // Only delta is in the order list
+        write_file(
+            &tmp,
+            "requests/collection.toml",
+            "version = 1\norder = [\"delta\"]\n",
+        );
+
+        let result = list_requests(tmp.path()).unwrap();
+        assert_eq!(result.len(), 3);
+        // delta first (ordered), then alpha, charlie (alphabetical)
+        assert_eq!(node_slug(&result[0]), "delta");
+        assert_eq!(node_slug(&result[1]), "alpha");
+        assert_eq!(node_slug(&result[2]), "charlie");
+    }
+
+    #[test]
+    fn order_with_nonexistent_entries_skips_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        setup_workspace(&tmp);
+        write_file(
+            &tmp,
+            "requests/real.req.toml",
+            "version = 1\nname = \"Real\"\nmethod = \"GET\"\nurl = \"http://x.com\"\n",
+        );
+        write_file(
+            &tmp,
+            "requests/collection.toml",
+            "version = 1\norder = [\"ghost\", \"real\", \"phantom\"]\n",
+        );
+
+        let result = list_requests(tmp.path()).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(node_slug(&result[0]), "real");
     }
 }

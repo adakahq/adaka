@@ -10,6 +10,7 @@ export interface TreeNodeRequest {
   name: string;
   path: string;
   method: string;
+  parse_error?: string;
 }
 
 export type TreeNode = TreeNodeFolder | TreeNodeRequest;
