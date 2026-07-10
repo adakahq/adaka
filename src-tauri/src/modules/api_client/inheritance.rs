@@ -101,7 +101,6 @@ fn load_defaults_chain(
     Ok(chain)
 }
 
-#[allow(dead_code)]
 pub fn resolve_order(order: &[String], files_on_disk: &[String]) -> Vec<String> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();

@@ -695,7 +695,7 @@ pub async fn pending_request_ids() -> Vec<String> {
 pub async fn cancel_all_pending() {
     let registry = cancel_registry();
     let map = registry.lock().await;
-    for (_, tx) in map.iter() {
+    for tx in map.values() {
         let _ = tx.send(true);
     }
 }
