@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import { useApiClientStore } from "../store";
 import { KeyValueGrid } from "./KeyValueGrid";
 import { AuthEditor } from "./AuthEditor";
@@ -14,11 +15,21 @@ const TABS = ["params", "headers", "auth", "body"] as const;
 
 export function RequestEditor({ onSend, onCancel, onSave }: Props) {
   const activeRequest = useApiClientStore((s) => s.activeRequest);
+  const activeRequestPath = useApiClientStore((s) => s.activeRequestPath);
   const dirty = useApiClientStore((s) => s.dirty);
   const sending = useApiClientStore((s) => s.sending);
   const activeTab = useApiClientStore((s) => s.activeTab);
   const setActiveTab = useApiClientStore((s) => s.setActiveTab);
   const updateRequest = useApiClientStore((s) => s.updateRequest);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const isDraft = activeRequest !== null && activeRequestPath === null;
+
+  useEffect(() => {
+    if (isDraft && urlInputRef.current) {
+      urlInputRef.current.focus();
+    }
+  }, [isDraft]);
 
   if (!activeRequest) {
     return (
@@ -30,6 +41,19 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {isDraft && (
+        <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-1.5">
+          <label className="text-xs text-adaka-muted">Name</label>
+          <input
+            type="text"
+            className="flex-1 rounded border border-adaka-border bg-adaka-bg px-2 py-0.5 text-xs text-adaka-text placeholder:text-adaka-faint focus:border-adaka-gold focus:outline-none"
+            value={activeRequest.name}
+            onChange={(e) => updateRequest({ name: e.target.value })}
+            placeholder="Request name (slug derived on save)"
+          />
+        </div>
+      )}
+
       <UrlBar
         method={activeRequest.method}
         url={activeRequest.url}
@@ -40,6 +64,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
         onSend={onSend}
         onCancel={onCancel}
         onSave={onSave}
+        urlInputRef={urlInputRef}
       />
 
       <div className="flex border-b border-adaka-border">

@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
+import { formatError } from "../../shared/formatError";
 import { useApiClientStore } from "./store";
 import { CollectionTree } from "./components/CollectionTree";
 import { RequestEditor } from "./components/RequestEditor";
@@ -50,37 +51,59 @@ export function ApiClientRoute() {
         setResponse(null);
         setError(null);
       } catch (e) {
-        ctx.ui.toast(`Failed to load request: ${String(e)}`, "error");
+        ctx.ui.toast(`Failed to load request: ${formatError(e)}`, "error");
       }
     },
     [ctx, setActiveRequest, setActiveRequestPath, setResponse, setError],
   );
 
   const saveRequest = useCallback(async () => {
-    if (!activeRequest || !activeRequestPath) return;
+    if (!activeRequest) return;
     try {
       const toml = serializeRequestToml(activeRequest);
+      let path = activeRequestPath;
+      if (!path) {
+        const slug =
+          activeRequest.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "") || "untitled";
+        path = `requests/${slug}.req.toml`;
+      }
       await ctx.invoke("workspace_write_file", {
         path: ctx.workspace.root,
-        relative: activeRequestPath,
+        relative: path,
         content: toml,
       });
+      useApiClientStore.getState().setActiveRequestPath(path);
       useApiClientStore.getState().setDirty(false);
+      await loadTree();
       ctx.ui.toast("Request saved");
     } catch (e) {
-      ctx.ui.toast(`Save failed: ${String(e)}`, "error");
+      ctx.ui.toast(`Save failed: ${formatError(e)}`, "error");
     }
-  }, [ctx, activeRequest, activeRequestPath]);
+  }, [ctx, activeRequest, activeRequestPath, loadTree]);
 
   const sendRequest = useCallback(async () => {
-    if (!activeRequestPath) return;
+    if (!activeRequestPath) {
+      if (activeRequest && dirty) {
+        await saveRequest();
+        const path = useApiClientStore.getState().activeRequestPath;
+        if (!path) return;
+      } else {
+        return;
+      }
+    }
+    const reqPath = useApiClientStore.getState().activeRequestPath;
+    if (!reqPath) return;
+
     setSending(true);
     setError(null);
     setResponse(null);
     try {
       const resp = await ctx.invoke<SendResponse>("api_send_request", {
         workspacePath: ctx.workspace.root,
-        requestPath: activeRequestPath,
+        requestPath: reqPath,
         envName: ctx.env.active() || null,
       });
       setResponse(resp);
@@ -90,7 +113,7 @@ export function ApiClientRoute() {
       setError(err);
       setSending(false);
     }
-  }, [ctx, activeRequestPath, setSending, setError, setResponse]);
+  }, [ctx, activeRequestPath, activeRequest, dirty, saveRequest, setSending, setError, setResponse]);
 
   const cancelRequest = useCallback(async () => {
     const { activeRequestId } = useApiClientStore.getState();
@@ -153,8 +176,6 @@ export function ApiClientRoute() {
 }
 
 function parseRequestToml(raw: string, path: string): RequestFile {
-  // Simple TOML parsing — we rely on the Rust parser for correctness,
-  // but for display we parse the basics client-side.
   const lines = raw.split("\n");
   const result: RequestFile = {
     version: 1,
@@ -184,14 +205,12 @@ function parseRequestToml(raw: string, path: string): RequestFile {
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
     let value = trimmed.slice(eqIdx + 1).trim();
-    // Remove surrounding quotes
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
     }
-    // Handle triple-quoted strings
     if (value === "'''" || value === '"""') {
       value = "";
       continue;

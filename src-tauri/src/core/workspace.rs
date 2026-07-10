@@ -577,6 +577,43 @@ mod tests {
     }
 
     #[test]
+    fn write_file_creates_deep_parent_dirs() {
+        let root = tmp_root();
+        create(root.path(), Some("Deep Write")).unwrap();
+
+        let content =
+            "version = 1\nname = \"deep\"\nmethod = \"GET\"\nurl = \"\"\n";
+        write_file(
+            root.path(),
+            "requests/new-folder/deep/file.req.toml",
+            content,
+        )
+        .unwrap();
+
+        let read_back =
+            read_file(root.path(), "requests/new-folder/deep/file.req.toml")
+                .unwrap();
+        assert_eq!(read_back, content);
+    }
+
+    #[test]
+    fn path_traversal_rejected_through_created_dirs() {
+        let root = tmp_root();
+        create(root.path(), Some("Traversal Dirs")).unwrap();
+
+        let err = write_file(
+            root.path(),
+            "requests/../../etc/evil.toml",
+            "version = 1\n",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
     #[cfg(unix)]
     fn path_traversal_rejected_symlink_escape() {
         use std::os::unix::fs as unix_fs;

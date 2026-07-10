@@ -20,6 +20,7 @@ interface Props {
   onSend: () => void;
   onCancel: () => void;
   onSave: () => void;
+  urlInputRef?: React.Ref<HTMLInputElement>;
 }
 
 export function UrlBar({
@@ -32,6 +33,7 @@ export function UrlBar({
   onSend,
   onCancel,
   onSave,
+  urlInputRef,
 }: Props) {
   return (
     <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-2">
@@ -49,6 +51,7 @@ export function UrlBar({
 
       <div className="relative flex-1">
         <input
+          ref={urlInputRef}
           type="text"
           className="w-full rounded border border-adaka-border bg-adaka-bg px-3 py-1.5 text-xs text-adaka-text placeholder:text-adaka-faint focus:border-adaka-gold focus:outline-none"
           placeholder="https://api.example.com/{{version}}/users"

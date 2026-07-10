@@ -25,6 +25,7 @@ interface ApiClientState {
   setResponseTab: (tab: ApiClientState["responseTab"]) => void;
   setPrettyBody: (pretty: boolean) => void;
   updateRequest: (partial: Partial<RequestFile>) => void;
+  createDraft: () => void;
 }
 
 export const useApiClientStore = create<ApiClientState>((set, get) => ({
@@ -57,4 +58,29 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
       set({ activeRequest: { ...activeRequest, ...partial }, dirty: true });
     }
   },
+  createDraft: () =>
+    set({
+      activeRequest: {
+        version: 1,
+        name: "Untitled request",
+        method: "GET",
+        url: "",
+        headers: {},
+        headers_disabled: {},
+        query: {},
+        query_disabled: {},
+        auth: { type: "inherit" },
+        body: { type: "none" },
+        settings: {
+          timeout_ms: 30000,
+          follow_redirects: true,
+          verify_tls: true,
+        },
+        tests: {},
+      },
+      activeRequestPath: null,
+      dirty: true,
+      response: null,
+      error: null,
+    }),
 }));

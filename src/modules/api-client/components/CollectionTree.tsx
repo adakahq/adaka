@@ -3,6 +3,7 @@ import { useModuleContext } from "../../../shared/module-sdk";
 import { useApiClientStore } from "../store";
 import type { TreeNode } from "../types";
 import { METHOD_COLORS } from "../types";
+import { formatError } from "../../../shared/formatError";
 
 interface Props {
   onSelect: (path: string) => void;
@@ -13,6 +14,7 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
   const ctx = useModuleContext();
   const tree = useApiClientStore((s) => s.tree);
   const activeRequestPath = useApiClientStore((s) => s.activeRequestPath);
+  const createDraft = useApiClientStore((s) => s.createDraft);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -41,32 +43,6 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
 
   const closeMenu = () => setContextMenu(null);
 
-  const createRequest = useCallback(
-    async (folder: string) => {
-      closeMenu();
-      const name = prompt("Request name:");
-      if (!name) return;
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-      const path = `${folder}/${slug}.req.toml`;
-      const content = `version = 1\nname = "${name}"\nmethod = "GET"\nurl = ""\n`;
-      try {
-        await ctx.invoke("workspace_write_file", {
-          path: ctx.workspace.root,
-          relative: path,
-          content,
-        });
-        onTreeChanged();
-        onSelect(path);
-      } catch (e) {
-        ctx.ui.toast(`Failed to create request: ${String(e)}`, "error");
-      }
-    },
-    [ctx, onTreeChanged, onSelect],
-  );
-
   const createFolder = useCallback(
     async (parentFolder: string) => {
       closeMenu();
@@ -76,7 +52,6 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-      // Create a collection.toml to establish the folder
       const path = `${parentFolder}/${slug}/collection.toml`;
       const content = `version = 1\norder = []\n`;
       try {
@@ -87,7 +62,7 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
         });
         onTreeChanged();
       } catch (e) {
-        ctx.ui.toast(`Failed to create folder: ${String(e)}`, "error");
+        ctx.ui.toast(`Failed to create folder: ${formatError(e)}`, "error");
       }
     },
     [ctx, onTreeChanged],
@@ -102,9 +77,6 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
         )
       )
         return;
-      // Delete by writing empty — workspace engine handles the rest
-      // Actually we need to remove the file. For now we write a minimal placeholder
-      // that signals deletion. TODO: add a proper delete command.
       ctx.ui.toast("Delete not yet implemented", "error");
     },
     [ctx],
@@ -185,7 +157,7 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
         <button
           className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
           title="New request"
-          onClick={() => createRequest("requests")}
+          onClick={() => createDraft()}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
@@ -195,17 +167,19 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
 
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-            <p className="text-xs text-adaka-faint">
-              No requests yet — create one or import from Postman
-            </p>
+          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
             <button
-              className="rounded border border-adaka-border px-2 py-1 text-xs text-adaka-muted"
-              disabled
-              title="Import coming soon"
+              className="rounded-lg border border-dashed border-adaka-gold/40 bg-adaka-gold/5 px-4 py-3 text-sm font-medium text-adaka-gold hover:border-adaka-gold hover:bg-adaka-gold/10"
+              onClick={() => createDraft()}
             >
-              Import (soon)
+              + New request
             </button>
+            <p className="text-xs leading-relaxed text-adaka-faint">
+              Requests are plain TOML files in{" "}
+              <code className="rounded bg-adaka-border px-1 py-0.5 text-[10px]">
+                .adaka/requests/
+              </code>
+            </p>
           </div>
         ) : (
           tree.map((node) => renderNode(node, 0))
@@ -221,7 +195,10 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
           >
             <button
               className="block w-full px-3 py-1 text-left text-xs text-adaka-text hover:bg-adaka-border"
-              onClick={() => createRequest(contextMenu.parentPath)}
+              onClick={() => {
+                closeMenu();
+                createDraft();
+              }}
             >
               New Request
             </button>
