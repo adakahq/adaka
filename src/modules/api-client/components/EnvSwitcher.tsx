@@ -14,6 +14,7 @@ export function EnvSwitcher() {
         const current = ctx.env.active();
         if (current && !list.includes(current)) {
           setActive("");
+          ctx.env.setActive("");
         }
       })
       .catch(() => setEnvs([]));
@@ -23,6 +24,7 @@ export function EnvSwitcher() {
     async (e: React.ChangeEvent<HTMLSelectElement>) => {
       const name = e.target.value;
       setActive(name);
+      ctx.env.setActive(name);
       try {
         await ctx.invoke("core_set_pref", {
           key: `activeEnv:${ctx.workspace.id}`,

@@ -84,17 +84,16 @@ export function ApiClientRoute() {
   }, [ctx, activeRequest, activeRequestPath, loadTree]);
 
   const sendRequest = useCallback(async () => {
-    if (!activeRequestPath) {
-      if (activeRequest && dirty) {
-        await saveRequest();
-        const path = useApiClientStore.getState().activeRequestPath;
-        if (!path) return;
-      } else {
-        return;
-      }
+    if (!activeRequest) return;
+
+    if (dirty) {
+      await saveRequest();
     }
+
     const reqPath = useApiClientStore.getState().activeRequestPath;
     if (!reqPath) return;
+
+    const envName = ctx.env.active() || null;
 
     setSending(true);
     setError(null);
@@ -103,7 +102,7 @@ export function ApiClientRoute() {
       const resp = await ctx.invoke<SendResponse>("api_send_request", {
         workspacePath: ctx.workspace.root,
         requestPath: reqPath,
-        envName: ctx.env.active() || null,
+        envName,
       });
       setResponse(resp);
       setSending(false);
@@ -112,7 +111,7 @@ export function ApiClientRoute() {
       setError(err);
       setSending(false);
     }
-  }, [ctx, activeRequestPath, activeRequest, dirty, saveRequest, setSending, setError, setResponse]);
+  }, [ctx, activeRequest, dirty, saveRequest, setSending, setError, setResponse]);
 
   const cancelRequest = useCallback(async () => {
     const { activeRequestId } = useApiClientStore.getState();

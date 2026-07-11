@@ -13,6 +13,7 @@ export function buildModuleContext(
 
     env: {
       active: () => useShellStore.getState().activeEnv,
+      setActive: (name: string) => useShellStore.getState().setActiveEnv(name),
       resolve: (template: string) =>
         invoke<string>("env_resolve", {
           path: ws.root,

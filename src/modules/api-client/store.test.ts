@@ -62,7 +62,8 @@ describe("useApiClientStore", () => {
     useApiClientStore.getState().updateRequest({ method: "PUT" });
 
     // Simulate reload: setActiveRequest with the saved method
-    const saved = useApiClientStore.getState().activeRequest!;
+    const saved = useApiClientStore.getState().activeRequest;
+    if (!saved) throw new Error("expected activeRequest");
     useApiClientStore.getState().setActiveRequest({ ...saved });
 
     expect(useApiClientStore.getState().activeRequest?.method).toBe("PUT");
@@ -85,5 +86,48 @@ describe("useApiClientStore", () => {
     useApiClientStore.getState().updateRequest({ method: "PATCH" });
     expect(useApiClientStore.getState().activeRequest).toBeNull();
     expect(useApiClientStore.getState().dirty).toBe(false);
+  });
+
+  test("dirty existing request: save clears dirty, path remains for send", () => {
+    useApiClientStore.getState().setActiveRequest(blankRequest({ url: "http://old" }));
+    useApiClientStore.getState().setActiveRequestPath("requests/my-req.req.toml");
+    useApiClientStore.getState().setDirty(false);
+
+    useApiClientStore.getState().updateRequest({ url: "http://new" });
+    expect(useApiClientStore.getState().dirty).toBe(true);
+    expect(useApiClientStore.getState().activeRequest?.url).toBe("http://new");
+
+    // Simulate save: dirty clears, path and url stay
+    useApiClientStore.getState().setDirty(false);
+    const state = useApiClientStore.getState();
+    expect(state.dirty).toBe(false);
+    expect(state.activeRequestPath).toBe("requests/my-req.req.toml");
+    expect(state.activeRequest?.url).toBe("http://new");
+  });
+
+  test("draft save assigns path so send can proceed", () => {
+    useApiClientStore.getState().createDraft();
+    expect(useApiClientStore.getState().activeRequestPath).toBeNull();
+    expect(useApiClientStore.getState().dirty).toBe(true);
+
+    useApiClientStore.getState().updateRequest({ url: "http://draft-url" });
+
+    // Simulate save assigning a path
+    useApiClientStore.getState().setActiveRequestPath("requests/untitled-request.req.toml");
+    useApiClientStore.getState().setDirty(false);
+
+    const state = useApiClientStore.getState();
+    expect(state.activeRequestPath).toBe("requests/untitled-request.req.toml");
+    expect(state.activeRequest?.url).toBe("http://draft-url");
+    expect(state.dirty).toBe(false);
+  });
+
+  test("serialized TOML contains current URL, not stale value", () => {
+    useApiClientStore.getState().setActiveRequest(blankRequest({ url: "http://old" }));
+    useApiClientStore.getState().updateRequest({ url: "http://{{NOPE}}/api" });
+
+    const req = useApiClientStore.getState().activeRequest;
+    if (!req) throw new Error("expected activeRequest");
+    expect(req.url).toBe("http://{{NOPE}}/api");
   });
 });

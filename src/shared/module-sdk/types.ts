@@ -49,6 +49,7 @@ export interface ModuleContext {
   workspace: WorkspaceInfo;
   env: {
     active(): string;
+    setActive(name: string): void;
     resolve(template: string): Promise<string>;
   };
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
