@@ -8,6 +8,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 import { CommandPalette } from "./CommandPalette";
 import { Toasts } from "./Toasts";
 import { ConfirmPanel } from "./ConfirmPanel";
+import { ShortcutOverlay } from "./ShortcutOverlay";
 import { getPref, setPref } from "../shared/prefs";
 import type { Theme } from "./store";
 
@@ -45,6 +46,8 @@ function ThemeSync() {
 function KeyboardShortcuts() {
   const setPaletteOpen = useShellStore((s) => s.setPaletteOpen);
   const paletteOpen = useShellStore((s) => s.paletteOpen);
+  const setShortcutsOpen = useShellStore((s) => s.setShortcutsOpen);
+  const shortcutsOpen = useShellStore((s) => s.shortcutsOpen);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -52,10 +55,14 @@ function KeyboardShortcuts() {
         e.preventDefault();
         setPaletteOpen(!paletteOpen);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen(!shortcutsOpen);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paletteOpen, setPaletteOpen]);
+  }, [paletteOpen, setPaletteOpen, shortcutsOpen, setShortcutsOpen]);
 
   return null;
 }
@@ -72,6 +79,7 @@ function Shell() {
         </div>
         <CommandPalette />
         <ConfirmPanel />
+        <ShortcutOverlay />
         <Toasts />
       </div>
     );
@@ -86,6 +94,7 @@ function Shell() {
       </div>
       <CommandPalette />
       <ConfirmPanel />
+      <ShortcutOverlay />
       <Toasts />
     </div>
   );

@@ -196,6 +196,17 @@ export function CommandPalette() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-3 border-t border-adaka-border px-4 py-1.5">
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">↑↓</kbd> navigate
+          </span>
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">↵</kbd> run
+          </span>
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">Esc</kbd> close
+          </span>
+        </div>
       </div>
     </div>
   );

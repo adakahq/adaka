@@ -429,6 +429,22 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
                   </button>
                 )}
                 <button
+                  className="block w-full px-3 py-1 text-left text-xs text-adaka-text hover:bg-adaka-border"
+                  onClick={() => {
+                    closeMenu();
+                    if (!contextMenu.node) return;
+                    void ctx.invoke("workspace_reveal_path", {
+                      path: ctx.workspace.root,
+                      relative: contextMenu.node.path,
+                    }).catch(() => {
+                      ctx.ui.toast("Could not open folder in file manager", "error");
+                    });
+                  }}
+                >
+                  Reveal in Explorer
+                </button>
+                <div className="my-1 border-t border-adaka-border" />
+                <button
                   className="block w-full px-3 py-1 text-left text-xs text-red-400 hover:bg-adaka-border"
                   onClick={() => {
                     if (contextMenu.node) deleteNode(contextMenu.node);

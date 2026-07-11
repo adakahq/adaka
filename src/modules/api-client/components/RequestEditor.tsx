@@ -33,8 +33,17 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
 
   if (!activeRequest) {
     return (
-      <div className="flex flex-1 items-center justify-center text-adaka-faint">
-        <p className="text-sm select-none">Select a request to edit</p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-adaka-muted select-none">
+          Select a request to edit
+        </p>
+        <p className="text-xs text-adaka-faint select-none">
+          Pick one from the collection tree, or press{" "}
+          <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
+            Ctrl+K
+          </kbd>{" "}
+          → "New request"
+        </p>
       </div>
     );
   }
@@ -121,6 +130,16 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
         {activeTab === "auth" && <AuthEditor />}
         {activeTab === "body" && <BodyEditor />}
       </div>
+      {activeRequestPath && (
+        <div className="border-t border-adaka-border px-3 py-1">
+          <p
+            className="truncate text-[10px] text-adaka-faint"
+            title={`.adaka/${activeRequestPath}`}
+          >
+            .adaka/{activeRequestPath}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
 import { useApiClientStore } from "./store";
@@ -6,10 +6,35 @@ import { CollectionTree } from "./components/CollectionTree";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
+import { EnvEditor } from "./components/EnvEditor";
 import type { TreeNode, SendResponse, StructuredError, RequestFile } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
+  const [editingEnv, setEditingEnv] = useState<string | null>(null);
+  const [envEditorDirty, setEnvEditorDirty] = useState(false);
+
+  const guardEnvEditor = useCallback(
+    (proceed: () => void) => {
+      if (!envEditorDirty) {
+        proceed();
+        return;
+      }
+      ctx.ui.confirm({
+        title: "Unsaved environment changes",
+        detail: `You have unsaved changes to ${editingEnv ?? "the environment"}.toml. Discard them?`,
+        confirmLabel: "Discard",
+        destructive: true,
+        onConfirm: () => {
+          ctx.ui.dismissConfirm();
+          setEnvEditorDirty(false);
+          proceed();
+        },
+      });
+    },
+    [ctx, envEditorDirty, editingEnv],
+  );
+
   const {
     setTree,
     activeRequestPath,
@@ -50,7 +75,7 @@ export function ApiClientRoute() {
         setResponse(null);
         setError(null);
       } catch (e) {
-        ctx.ui.toast(`Failed to load request: ${formatError(e)}`, "error");
+        ctx.ui.toast(`Could not load request — ${formatError(e)}`, "error");
       }
     },
     [ctx, setActiveRequest, setActiveRequestPath, setResponse, setError],
@@ -150,7 +175,7 @@ export function ApiClientRoute() {
       <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-1.5">
         <span className="text-xs font-medium text-adaka-muted">API Client</span>
         <div className="ml-auto">
-          <EnvSwitcher />
+          <EnvSwitcher onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden">
@@ -166,7 +191,15 @@ export function ApiClientRoute() {
           />
         </div>
         <div className="flex w-[40%] min-w-[300px] flex-col overflow-hidden border-l border-adaka-border">
-          <ResponsePane />
+          {editingEnv ? (
+            <EnvEditor
+              envName={editingEnv}
+              onClose={() => guardEnvEditor(() => setEditingEnv(null))}
+              onDirtyChange={setEnvEditorDirty}
+            />
+          ) : (
+            <ResponsePane />
+          )}
         </div>
       </div>
     </div>

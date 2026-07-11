@@ -203,6 +203,43 @@ pub fn delete_file(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
     Ok(())
 }
 
+/// Reveal a path inside `.adaka/` in the OS file manager.
+/// Opens the containing folder. Path traversal checked.
+pub fn reveal_path(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
+    let resolved = resolve_scoped_path(root, relative)?;
+    let dir = if resolved.is_dir() {
+        resolved
+    } else {
+        resolved
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| resolved.clone())
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| WorkspaceError::Io(e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| WorkspaceError::Io(e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| WorkspaceError::Io(e))?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -400,6 +437,11 @@ pub fn workspace_write_file(
 #[tauri::command]
 pub fn workspace_delete_file(path: String, relative: String) -> Result<(), WorkspaceError> {
     delete_file(Path::new(&path), &relative)
+}
+
+#[tauri::command]
+pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), WorkspaceError> {
+    reveal_path(Path::new(&path), &relative)
 }
 
 // ---------------------------------------------------------------------------
@@ -667,6 +709,18 @@ mod tests {
         create(root.path(), Some("Delete Traversal")).unwrap();
 
         let err = delete_file(root.path(), "../etc/passwd").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    fn reveal_path_rejects_traversal() {
+        let root = tmp_root();
+        create(root.path(), Some("Reveal Traversal")).unwrap();
+
+        let err = reveal_path(root.path(), "../etc/passwd").unwrap_err();
         assert!(
             matches!(err, WorkspaceError::PathTraversal(_)),
             "expected PathTraversal, got: {err}"

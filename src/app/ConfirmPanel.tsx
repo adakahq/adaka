@@ -1,8 +1,21 @@
+import { useEffect } from "react";
 import { useShellStore } from "./store";
 
 export function ConfirmPanel() {
   const confirm = useShellStore((s) => s.confirm);
   const dismiss = useShellStore((s) => s.dismissConfirm);
+
+  useEffect(() => {
+    if (!confirm) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        dismiss();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [confirm, dismiss]);
 
   if (!confirm) return null;
 

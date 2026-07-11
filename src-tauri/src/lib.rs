@@ -86,6 +86,7 @@ pub fn run() {
             workspace::workspace_read_file,
             workspace::workspace_write_file,
             workspace::workspace_delete_file,
+            workspace::workspace_reveal_path,
             env::env_list,
             env::env_resolve,
             events::core_emit_event,
