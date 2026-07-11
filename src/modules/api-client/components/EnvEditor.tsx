@@ -6,14 +6,6 @@ import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 
-const SEED_TEMPLATE = `# Environment: {{NAME}}
-# Variables are available in requests as {{VAR_NAME}}
-
-[vars]
-# BASE_URL = "http://localhost:3000"
-# API_KEY = "your-key-here"
-`;
-
 const adakaTheme = EditorView.theme({
   "&": {
     backgroundColor: "#16130F",
@@ -94,9 +86,24 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
           relative: `environments/${envName}.toml`,
         });
       } catch {
-        content = SEED_TEMPLATE.replace("{{NAME}}", envName);
+        setParseError(`File environments/${envName}.toml not found — create it with the + button in the environment switcher`);
+        return;
       }
       originalContent.current = content;
+
+      // Validate TOML structure on load (catches duplicate keys edited externally)
+      try {
+        await ctx.invoke("env_resolve", {
+          path: ctx.workspace.root,
+          envName,
+          template: "",
+        });
+      } catch (e) {
+        const msg = formatError(e);
+        if (msg.toLowerCase().includes("parse") || msg.toLowerCase().includes("toml")) {
+          setParseError(msg);
+        }
+      }
 
       const saveKeymap = keymap.of([
         {

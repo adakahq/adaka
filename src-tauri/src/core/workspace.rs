@@ -728,6 +728,22 @@ mod tests {
     }
 
     #[test]
+    fn env_seed_is_idempotent_across_opens() {
+        let root = tmp_root();
+        create(root.path(), Some("Idempotent")).unwrap();
+
+        let after_create = read_file(root.path(), "environments/local.toml").unwrap();
+
+        // "Open" the workspace 3 times — open() never rewrites env files
+        for _ in 0..3 {
+            let _info = open(root.path()).unwrap();
+        }
+
+        let after_opens = read_file(root.path(), "environments/local.toml").unwrap();
+        assert_eq!(after_create, after_opens, "env file must not be rewritten on open");
+    }
+
+    #[test]
     #[cfg(unix)]
     fn path_traversal_rejected_symlink_escape() {
         use std::os::unix::fs as unix_fs;

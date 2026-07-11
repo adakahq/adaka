@@ -96,15 +96,18 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const moduleContexts = useShellStore((s) => s.moduleContexts);
+  const workspace = useShellStore((s) => s.workspace);
 
   const allCommands = useMemo(() => {
     if (!open) return [];
+    const builtins = builtinCommands();
+    if (!workspace) return builtins;
     const moduleResolved: ResolvedCommand[] = getModules().flatMap((m) => {
       const ctx = moduleContexts.get(m.id) ?? null;
       return m.commands.map((cmd) => ({ cmd, ctx, moduleId: m.id }));
     });
-    return [...builtinCommands(), ...moduleResolved];
-  }, [open, moduleContexts]);
+    return [...builtins, ...moduleResolved];
+  }, [open, moduleContexts, workspace]);
 
   const filtered = useMemo(() => {
     if (!query) return allCommands;
@@ -127,16 +130,22 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const addToast = useShellStore((s) => s.addToast);
+
   const run = useCallback(
     (rc: ResolvedCommand) => {
       setPaletteOpen(false);
+      if (rc.moduleId && !workspace) {
+        addToast("Open a workspace first", "error");
+        return;
+      }
       if (rc.ctx) {
         rc.cmd.action(rc.ctx);
       } else {
         rc.cmd.action(null as unknown as ModuleContext);
       }
     },
-    [setPaletteOpen],
+    [setPaletteOpen, workspace, addToast],
   );
 
   const onKeyDown = useCallback(

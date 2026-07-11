@@ -7,12 +7,14 @@ import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
 import { EnvEditor } from "./components/EnvEditor";
+import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
 import type { TreeNode, SendResponse, StructuredError, RequestFile } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
   const [editingEnv, setEditingEnv] = useState<string | null>(null);
   const [envEditorDirty, setEnvEditorDirty] = useState(false);
+  const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
 
   const guardEnvEditor = useCallback(
     (proceed: () => void) => {
@@ -108,7 +110,7 @@ export function ApiClientRoute() {
     }
   }, [ctx, activeRequest, activeRequestPath, loadTree]);
 
-  const sendRequest = useCallback(async () => {
+  const doSend = useCallback(async () => {
     if (!activeRequest) return;
 
     if (dirty) {
@@ -138,6 +140,19 @@ export function ApiClientRoute() {
     }
   }, [ctx, activeRequest, dirty, saveRequest, setSending, setError, setResponse]);
 
+  const sendRequest = useCallback(() => {
+    if (!activeRequest) return;
+    if (editingEnv) {
+      guardEnvEditor(() => {
+        setEditingEnv(null);
+        setEnvEditorDirty(false);
+        void doSend();
+      });
+    } else {
+      void doSend();
+    }
+  }, [activeRequest, editingEnv, guardEnvEditor, doSend]);
+
   const cancelRequest = useCallback(async () => {
     const { activeRequestId } = useApiClientStore.getState();
     if (activeRequestId) {
@@ -158,7 +173,7 @@ export function ApiClientRoute() {
         if (sending) {
           void cancelRequest();
         } else {
-          void sendRequest();
+          sendRequest();
         }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
@@ -178,6 +193,9 @@ export function ApiClientRoute() {
           <EnvSwitcher onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
         </div>
       </div>
+      {!baseUrlDismissed && (
+        <BaseUrlPrompt onDismiss={() => setBaseUrlDismissed(true)} />
+      )}
       <div className="flex flex-1 overflow-hidden">
         <CollectionTree
           onSelect={loadRequest}
