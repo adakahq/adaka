@@ -41,6 +41,7 @@ export function UrlBar({
         className="rounded border border-adaka-border bg-adaka-chrome px-2 py-1 text-xs font-bold text-adaka-text focus:border-adaka-gold focus:outline-none"
         value={method}
         onChange={(e) => onMethodChange(e.target.value)}
+        title="HTTP method"
       >
         {METHODS.map((m) => (
           <option key={m} value={m}>

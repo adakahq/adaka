@@ -1,6 +1,7 @@
 import { getModules } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { ModuleIcon } from "./icons";
+import { closeWorkspace } from "./workspace-actions";
 
 export function Sidebar() {
   const workspace = useShellStore((s) => s.workspace);
@@ -54,6 +55,17 @@ export function Sidebar() {
 
       {/* TODO(light-theme): restore theme toggle here */}
       <div className="flex flex-col items-center gap-1">
+        {workspace && (
+          <button
+            className="flex h-8 w-8 items-center justify-center rounded text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
+            title="Close workspace"
+            onClick={() => closeWorkspace()}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 00-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 002 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+            </svg>
+          </button>
+        )}
         <button
           className="flex h-8 w-8 items-center justify-center rounded text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
           title="Settings"

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
 import { useShellStore } from "./store";
-import { openWorkspace, createWorkspace } from "./workspace-actions";
+import { openWorkspace, createWorkspace, closeWorkspace } from "./workspace-actions";
 
 interface ResolvedCommand {
   cmd: PaletteCommand;
@@ -102,6 +102,16 @@ export function CommandPalette() {
     if (!open) return [];
     const builtins = builtinCommands();
     if (!workspace) return builtins;
+    builtins.push({
+      cmd: {
+        id: "builtin:close-workspace",
+        label: "Close workspace",
+        keywords: ["exit", "leave"],
+        action: () => closeWorkspace(),
+      },
+      ctx: null,
+      moduleId: null,
+    });
     const moduleResolved: ResolvedCommand[] = getModules().flatMap((m) => {
       const ctx = moduleContexts.get(m.id) ?? null;
       return m.commands.map((cmd) => ({ cmd, ctx, moduleId: m.id }));

@@ -51,7 +51,7 @@ export function BaseUrlPrompt({ onDismiss }: Props) {
         relative: "environments/local.toml",
         content: updated,
       });
-      ctx.ui.toast("BASE_URL saved to environments/local.toml");
+      ctx.ui.toast("Base URL saved — your requests will use this address");
       onDismiss();
     } catch (e) {
       ctx.ui.toast(`Failed: ${formatError(e)}`, "error");
@@ -64,11 +64,12 @@ export function BaseUrlPrompt({ onDismiss }: Props) {
 
   return (
     <div className="flex items-center gap-2 border-b border-adaka-gold/30 bg-adaka-gold/5 px-3 py-1.5">
-      <span className="text-xs text-adaka-muted">Where&apos;s your API?</span>
+      <span className="text-xs text-adaka-muted">Where&apos;s the API you want to test?</span>
       <input
         ref={inputRef}
         className="w-56 rounded border border-adaka-border bg-adaka-bg px-2 py-0.5 text-xs text-adaka-text placeholder:text-adaka-faint focus:border-adaka-gold focus:outline-none"
-        placeholder="http://127.0.0.1:8080"
+        placeholder="e.g. http://127.0.0.1:8080"
+        title="You can change this anytime in the Variables editor"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

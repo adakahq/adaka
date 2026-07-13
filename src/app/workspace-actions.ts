@@ -102,4 +102,16 @@ export async function createWorkspace(): Promise<void> {
   }
 }
 
+export function closeWorkspace(): void {
+  const store = useShellStore.getState();
+  if (!store.workspace) return;
+
+  store.setWorkspace(null);
+  store.setModuleContexts(new Map());
+  const tabIds = store.tabs.map((t) => t.id);
+  for (const id of tabIds) {
+    store.closeTab(id);
+  }
+}
+
 export { isStructuredError, type StructuredError };

@@ -161,6 +161,19 @@ pub fn create(root: &Path, name: Option<&str>) -> Result<WorkspaceInfo, Workspac
         ),
     )?;
 
+    // Seed a welcome request so new users have something to send immediately.
+    let req_dir = adaka_dir.join("requests");
+    fs::create_dir_all(&req_dir)?;
+    atomic_write(
+        &req_dir.join("welcome.req.toml"),
+        concat!(
+            "version = 1\n",
+            "name = \"My first request\"\n",
+            "method = \"GET\"\n",
+            "url = \"{{BASE_URL}}/\"\n",
+        ),
+    )?;
+
     Ok(WorkspaceInfo {
         id,
         name: resolved_name,
@@ -725,6 +738,34 @@ mod tests {
             matches!(err, WorkspaceError::PathTraversal(_)),
             "expected PathTraversal, got: {err}"
         );
+    }
+
+    #[test]
+    fn welcome_request_seeded_on_create() {
+        let root = tmp_root();
+        create(root.path(), Some("Welcome")).unwrap();
+
+        let content = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+        assert!(content.contains("My first request"));
+        assert!(content.contains("{{BASE_URL}}"));
+    }
+
+    #[test]
+    fn seeds_are_idempotent_across_opens() {
+        let root = tmp_root();
+        create(root.path(), Some("Idempotent")).unwrap();
+
+        let env_after_create = read_file(root.path(), "environments/local.toml").unwrap();
+        let req_after_create = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+
+        for _ in 0..3 {
+            let _info = open(root.path()).unwrap();
+        }
+
+        let env_after_opens = read_file(root.path(), "environments/local.toml").unwrap();
+        let req_after_opens = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+        assert_eq!(env_after_create, env_after_opens, "env file must not be rewritten on open");
+        assert_eq!(req_after_create, req_after_opens, "request file must not be rewritten on open");
     }
 
     #[test]

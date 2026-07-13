@@ -20,6 +20,8 @@ pub enum ApiClientError {
     Parse { file: String, detail: String },
     #[error("unresolved variable: {0}")]
     UnresolvedVar(String),
+    #[error("invalid URL: {0}")]
+    InvalidUrl(String),
     #[error("network error: {0}")]
     Network(String),
     #[error("request timed out: {0}")]
@@ -40,6 +42,7 @@ impl ApiClientError {
             Self::FileNotFound(_) => "FILE",
             Self::Parse { .. } => "PARSE",
             Self::UnresolvedVar(_) => "UNRESOLVED_VAR",
+            Self::InvalidUrl(_) => "INVALID_URL",
             Self::Network(_) => "NETWORK",
             Self::Timeout(_) => "TIMEOUT",
             Self::Tls(_) => "TLS",
@@ -262,6 +265,14 @@ mod tests {
         let v = serialize_error(&e);
         assert_eq!(v["code"], "UNRESOLVED_VAR");
         assert!(v["message"].as_str().unwrap().contains("MISSING_VAR"));
+    }
+
+    #[test]
+    fn error_invalid_url_code() {
+        let e = ApiClientError::InvalidUrl("missing scheme".into());
+        let v = serialize_error(&e);
+        assert_eq!(v["code"], "INVALID_URL");
+        assert!(v["message"].as_str().unwrap().contains("missing scheme"));
     }
 
     #[test]
