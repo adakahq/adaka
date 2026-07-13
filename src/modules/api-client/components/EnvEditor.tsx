@@ -64,7 +64,7 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
     } catch (e) {
       const msg = formatError(e);
       if (msg.toLowerCase().includes("toml") || msg.toLowerCase().includes("parse")) {
-        setParseError(msg);
+        setParseError(`Invalid TOML — fix the syntax and save again. ${msg}`);
       } else {
         ctx.ui.toast(`Save failed: ${msg}`, "error");
       }
@@ -77,6 +77,7 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    let cancelled = false;
 
     void (async () => {
       let content = "";
@@ -86,12 +87,14 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
           relative: `environments/${envName}.toml`,
         });
       } catch {
-        setParseError(`File environments/${envName}.toml not found — create it with the + button in the environment switcher`);
+        if (!cancelled) {
+          setParseError(`File environments/${envName}.toml not found — create it with the + button in the environment switcher`);
+        }
         return;
       }
+      if (cancelled) return;
       originalContent.current = content;
 
-      // Validate TOML structure on load (catches duplicate keys edited externally)
       try {
         await ctx.invoke("env_resolve", {
           path: ctx.workspace.root,
@@ -99,11 +102,13 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
           template: "",
         });
       } catch (e) {
+        if (cancelled) return;
         const msg = formatError(e);
         if (msg.toLowerCase().includes("parse") || msg.toLowerCase().includes("toml")) {
           setParseError(msg);
         }
       }
+      if (cancelled) return;
 
       const saveKeymap = keymap.of([
         {
@@ -137,13 +142,14 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
         ],
       });
 
-      if (!containerRef.current) return;
+      if (cancelled || !containerRef.current) return;
       const view = new EditorView({ state, parent: containerRef.current });
       viewRef.current = view;
       view.focus();
     })();
 
     return () => {
+      cancelled = true;
       viewRef.current?.destroy();
       viewRef.current = null;
     };

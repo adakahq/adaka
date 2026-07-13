@@ -129,7 +129,7 @@ function errorHint(code: string): string | null {
     case "PARSE":
       return "The request file has a TOML syntax error — check for unmatched quotes or brackets.";
     case "TIMEOUT":
-      return "The server didn't respond in time — try increasing the timeout in the request settings tab.";
+      return "The server didn't respond in time — try increasing the timeout in the request settings tab, and double-check the address.";
     case "CONNECT":
       return "Could not reach the server — check the URL and make sure the server is running.";
     default:
