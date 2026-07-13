@@ -86,7 +86,6 @@ export function ApiClientRoute() {
   const saveRequest = useCallback(async () => {
     if (!activeRequest) return;
     try {
-      const toml = serializeRequestToml(activeRequest);
       let path = activeRequestPath;
       if (!path) {
         const slug =
@@ -96,10 +95,10 @@ export function ApiClientRoute() {
             .replace(/^-|-$/g, "") || "untitled";
         path = `requests/${slug}.req.toml`;
       }
-      await ctx.invoke("workspace_write_file", {
-        path: ctx.workspace.root,
-        relative: path,
-        content: toml,
+      await ctx.invoke("api_save_request", {
+        workspacePath: ctx.workspace.root,
+        requestPath: path,
+        def: activeRequest,
       });
       useApiClientStore.getState().setActiveRequestPath(path);
       useApiClientStore.getState().setDirty(false);
@@ -222,78 +221,4 @@ export function ApiClientRoute() {
       </div>
     </div>
   );
-}
-
-function serializeRequestToml(req: RequestFile): string {
-  const lines: string[] = [];
-  lines.push(`version = ${req.version}`);
-  lines.push(`name = "${req.name}"`);
-  lines.push(`method = "${req.method}"`);
-  lines.push(`url = "${req.url}"`);
-
-  if (Object.keys(req.headers).length > 0) {
-    lines.push("", "[headers]");
-    for (const [k, v] of Object.entries(req.headers)) {
-      lines.push(`${k} = "${v}"`);
-    }
-  }
-
-  if (Object.keys(req.headers_disabled).length > 0) {
-    lines.push("", "[headers_disabled]");
-    for (const [k, v] of Object.entries(req.headers_disabled)) {
-      lines.push(`${k} = "${v}"`);
-    }
-  }
-
-  if (Object.keys(req.query).length > 0) {
-    lines.push("", "[query]");
-    for (const [k, v] of Object.entries(req.query)) {
-      lines.push(`${k} = "${v}"`);
-    }
-  }
-
-  if (Object.keys(req.query_disabled).length > 0) {
-    lines.push("", "[query_disabled]");
-    for (const [k, v] of Object.entries(req.query_disabled)) {
-      lines.push(`${k} = "${v}"`);
-    }
-  }
-
-  if (req.auth.type !== "inherit") {
-    lines.push("", "[auth]");
-    lines.push(`type = "${req.auth.type}"`);
-    if (req.auth.token) lines.push(`token = "${req.auth.token}"`);
-    if (req.auth.username) lines.push(`username = "${req.auth.username}"`);
-    if (req.auth.password) lines.push(`password = "${req.auth.password}"`);
-    if (req.auth.key) lines.push(`key = "${req.auth.key}"`);
-    if (req.auth.value) lines.push(`value = "${req.auth.value}"`);
-    if (req.auth.in) lines.push(`in = "${req.auth.in}"`);
-  }
-
-  if (req.body.type !== "none") {
-    lines.push("", "[body]");
-    lines.push(`type = "${req.body.type}"`);
-    if (req.body.content !== undefined) {
-      lines.push(`content = '''`);
-      lines.push(req.body.content);
-      lines.push(`'''`);
-    }
-    if (req.body.content_type)
-      lines.push(`content_type = "${req.body.content_type}"`);
-  }
-
-  const s = req.settings;
-  if (s.timeout_ms !== 30000 || !s.follow_redirects || !s.verify_tls) {
-    lines.push("", "[settings]");
-    if (s.timeout_ms !== 30000) lines.push(`timeout_ms = ${s.timeout_ms}`);
-    if (!s.follow_redirects) lines.push(`follow_redirects = false`);
-    if (!s.verify_tls) lines.push(`verify_tls = false`);
-  }
-
-  if (req.tests.status !== undefined) {
-    lines.push("", "[tests]");
-    lines.push(`status = ${req.tests.status}`);
-  }
-
-  return lines.join("\n") + "\n";
 }

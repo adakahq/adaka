@@ -102,6 +102,28 @@ pub fn api_parse_collection(
 }
 
 #[tauri::command]
+pub fn api_save_request(
+    workspace_path: String,
+    request_path: String,
+    def: format::RequestFile,
+) -> Result<(), ApiClientError> {
+    let root = Path::new(&workspace_path);
+
+    // Load existing content to preserve comments and unknown keys
+    let existing = workspace::read_file(root, &request_path).ok();
+
+    let toml = format::serialize_request(&def, existing.as_deref()).map_err(|detail| {
+        ApiClientError::Parse {
+            file: request_path.clone(),
+            detail,
+        }
+    })?;
+
+    workspace::write_file(root, &request_path, &toml)?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn api_resolve_request(
     workspace_path: String,
     request_path: String,

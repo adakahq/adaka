@@ -54,6 +54,9 @@ pnpm install
 pnpm tauri dev
 ```
 
+For a local test API, run `php -S 127.0.0.1:8080 dev/router.php` —
+every path and method echoes back what you sent as JSON.
+
 Requires Node 20+, pnpm, and the Rust stable toolchain
 ([Tauri prerequisites](https://tauri.app/start/prerequisites/)).
 

@@ -96,6 +96,7 @@ pub fn run() {
             api_client::api_list_requests,
             api_client::api_parse_request,
             api_client::api_parse_collection,
+            api_client::api_save_request,
             api_client::api_resolve_request,
             api_client::api_send_request,
             api_client::api_cancel_request,
