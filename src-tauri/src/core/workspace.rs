@@ -234,21 +234,21 @@ pub fn reveal_path(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
         std::process::Command::new("explorer")
             .arg(&dir)
             .spawn()
-            .map_err(|e| WorkspaceError::Io(e))?;
+            .map_err(WorkspaceError::Io)?;
     }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
             .arg(&dir)
             .spawn()
-            .map_err(|e| WorkspaceError::Io(e))?;
+            .map_err(WorkspaceError::Io)?;
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
             .arg(&dir)
             .spawn()
-            .map_err(|e| WorkspaceError::Io(e))?;
+            .map_err(WorkspaceError::Io)?;
     }
     Ok(())
 }
