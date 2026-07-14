@@ -457,6 +457,58 @@ pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), Works
     reveal_path(Path::new(&path), &relative)
 }
 
+#[tauri::command]
+pub fn workspace_default_dir(app: tauri::AppHandle) -> Result<String, WorkspaceError> {
+    use tauri::Manager;
+    let docs = app
+        .path()
+        .document_dir()
+        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
+    Ok(docs.join("Adaka").to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn workspace_quick_create(
+    name: String,
+    app: tauri::AppHandle,
+) -> Result<WorkspaceInfo, WorkspaceError> {
+    use tauri::Manager;
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(WorkspaceError::PathTraversal(
+            "workspace name cannot be empty".into(),
+        ));
+    }
+    if !is_safe_folder_name(&name) {
+        return Err(WorkspaceError::PathTraversal(format!(
+            "name contains characters not allowed in folder names: {name}"
+        )));
+    }
+    let docs = app
+        .path()
+        .document_dir()
+        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
+    let ws_root = docs.join("Adaka").join(&name);
+    if ws_root.exists() {
+        return Err(WorkspaceError::AlreadyExists(ws_root));
+    }
+    std::fs::create_dir_all(&ws_root)?;
+    create(&ws_root, Some(&name))
+}
+
+fn is_safe_folder_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 100 {
+        return false;
+    }
+    if name.starts_with('.') || name.ends_with('.') || name.ends_with(' ') {
+        return false;
+    }
+    let forbidden = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    !name
+        .chars()
+        .any(|c| forbidden.contains(&c) || c.is_control())
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -791,6 +843,28 @@ mod tests {
             after_create, after_opens,
             "env file must not be rewritten on open"
         );
+    }
+
+    #[test]
+    fn safe_folder_name_rejects_forbidden_chars() {
+        assert!(!is_safe_folder_name(""));
+        assert!(!is_safe_folder_name("foo/bar"));
+        assert!(!is_safe_folder_name("foo\\bar"));
+        assert!(!is_safe_folder_name("foo:bar"));
+        assert!(!is_safe_folder_name("foo*bar"));
+        assert!(!is_safe_folder_name(".hidden"));
+        assert!(!is_safe_folder_name("trailing."));
+        assert!(!is_safe_folder_name("trailing "));
+        assert!(!is_safe_folder_name(&"a".repeat(101)));
+    }
+
+    #[test]
+    fn safe_folder_name_accepts_valid_names() {
+        assert!(is_safe_folder_name("My Project"));
+        assert!(is_safe_folder_name("api-tests"));
+        assert!(is_safe_folder_name("workspace_1"));
+        assert!(is_safe_folder_name("Тест"));
+        assert!(is_safe_folder_name(&"a".repeat(100)));
     }
 
     #[test]

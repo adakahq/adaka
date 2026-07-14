@@ -27,6 +27,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "save", label: "Save request", keys: "Ctrl+S", scope: "api-client" },
   { id: "rename", label: "Rename", keys: "F2", scope: "api-client" },
   { id: "delete", label: "Delete", keys: "Del", scope: "api-client" },
+  { id: "history", label: "Show request history", keys: "Ctrl+H", scope: "api-client" },
   { id: "run-tool", label: "Run tool", keys: "Ctrl+Enter", scope: "utilities" },
 ];
 

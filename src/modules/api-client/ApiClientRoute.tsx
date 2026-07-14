@@ -8,7 +8,7 @@ import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
 import { EnvEditor } from "./components/EnvEditor";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
-import type { TreeNode, SendResponse, StructuredError, RequestFile } from "./types";
+import type { TreeNode, SendResponse, StructuredError, RequestFile, HistoryListEntry } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
@@ -65,6 +65,21 @@ export function ApiClientRoute() {
     void loadTree();
   }, [loadTree]);
 
+  const loadHistory = useCallback(
+    async (path: string) => {
+      try {
+        const entries = await ctx.invoke<HistoryListEntry[]>("api_history_list", {
+          workspacePath: ctx.workspace.root,
+          requestPath: path,
+        });
+        useApiClientStore.getState().setHistoryEntries(entries);
+      } catch {
+        useApiClientStore.getState().setHistoryEntries([]);
+      }
+    },
+    [ctx],
+  );
+
   const loadRequest = useCallback(
     async (path: string) => {
       try {
@@ -76,11 +91,12 @@ export function ApiClientRoute() {
         setActiveRequestPath(path);
         setResponse(null);
         setError(null);
+        void loadHistory(path);
       } catch (e) {
         ctx.ui.toast(`Could not load request — ${formatError(e)}`, "error");
       }
     },
-    [ctx, setActiveRequest, setActiveRequestPath, setResponse, setError],
+    [ctx, setActiveRequest, setActiveRequestPath, setResponse, setError, loadHistory],
   );
 
   const saveRequest = useCallback(async () => {
@@ -131,13 +147,15 @@ export function ApiClientRoute() {
         envName,
       });
       setResponse(resp);
+      useApiClientStore.getState().setViewingHistory(null);
       setSending(false);
+      void loadHistory(reqPath);
     } catch (e: unknown) {
       const err = e as StructuredError;
       setError(err);
       setSending(false);
     }
-  }, [ctx, activeRequest, dirty, saveRequest, setSending, setError, setResponse]);
+  }, [ctx, activeRequest, dirty, saveRequest, setSending, setError, setResponse, loadHistory]);
 
   const sendRequest = useCallback(() => {
     if (!activeRequest) return;
@@ -178,6 +196,17 @@ export function ApiClientRoute() {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         if (dirty) void saveRequest();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "h") {
+        e.preventDefault();
+        useApiClientStore.getState().setResponseTab("history");
+      }
+      if (e.key === "Escape") {
+        const { viewingHistory } = useApiClientStore.getState();
+        if (viewingHistory) {
+          e.preventDefault();
+          useApiClientStore.getState().setViewingHistory(null);
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);

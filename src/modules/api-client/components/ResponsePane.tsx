@@ -1,8 +1,9 @@
 import { useApiClientStore } from "../store";
 import { formatBytes, formatDuration, statusColor } from "../utils";
+import { HistoryPanel } from "./HistoryPanel";
 import type { TimingInfo } from "../types";
 
-const RESPONSE_TABS = ["body", "headers", "timing"] as const;
+const RESPONSE_TABS = ["body", "headers", "timing", "history"] as const;
 
 export function ResponsePane() {
   const response = useApiClientStore((s) => s.response);
@@ -12,73 +13,62 @@ export function ResponsePane() {
   const setResponseTab = useApiClientStore((s) => s.setResponseTab);
   const prettyBody = useApiClientStore((s) => s.prettyBody);
   const setPrettyBody = useApiClientStore((s) => s.setPrettyBody);
+  const viewingHistory = useApiClientStore((s) => s.viewingHistory);
+  const setViewingHistory = useApiClientStore((s) => s.setViewingHistory);
+  const historyEntries = useApiClientStore((s) => s.historyEntries);
 
-  if (sending) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-adaka-muted">
-          <svg
-            className="h-4 w-4 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span className="text-xs">Sending...</span>
-        </div>
-      </div>
-    );
-  }
+  // Determine effective response data: historical or live
+  const effectiveResponse = viewingHistory
+    ? {
+        status: viewingHistory.status,
+        status_text: `${viewingHistory.status}`,
+        headers: JSON.parse(viewingHistory.response_headers || "{}") as Record<string, string>,
+        body: viewingHistory.response_body,
+        body_size: viewingHistory.response_size,
+        truncated: false,
+        binary: false,
+        timing: {
+          total_ms: viewingHistory.duration_ms,
+          first_byte_ms: 0,
+          dns_ms: 0,
+          connect_ms: 0,
+          tls_ms: 0,
+          download_ms: 0,
+        },
+        url_resolved: viewingHistory.url_resolved,
+        method: viewingHistory.method,
+      }
+    : response;
 
-  if (error) {
-    return <ErrorPanel error={error} />;
-  }
-
-  if (!response) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <p className="text-xs text-adaka-muted select-none">
-          Response will appear here
-        </p>
-        <p className="text-[11px] text-adaka-faint select-none">
-          Press{" "}
-          <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
-            Ctrl+↵
-          </kbd>{" "}
-          or click Send to make a request
-        </p>
-      </div>
-    );
-  }
+  const showStatusLine = effectiveResponse && !sending;
+  const showError = error && !viewingHistory && !sending;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Status line */}
-      <div className="flex items-center gap-3 border-b border-adaka-border px-3 py-2">
-        <span className={`text-sm font-bold ${statusColor(response.status)}`}>
-          {response.status} {response.status_text}
-        </span>
-        <span className="text-xs text-adaka-muted">
-          {formatDuration(response.timing.total_ms)}
-        </span>
-        <span className="text-xs text-adaka-muted">
-          {formatBytes(response.body_size)}
-        </span>
-      </div>
+      {/* History banner */}
+      {viewingHistory && (
+        <HistoryBanner
+          startedAt={viewingHistory.started_at}
+          onReturn={() => setViewingHistory(null)}
+        />
+      )}
 
-      {/* Tabs */}
+      {/* Status line */}
+      {showStatusLine && (
+        <div className="flex items-center gap-3 border-b border-adaka-border px-3 py-2">
+          <span className={`text-sm font-bold ${statusColor(effectiveResponse.status)}`}>
+            {effectiveResponse.status} {effectiveResponse.status_text}
+          </span>
+          <span className="text-xs text-adaka-muted">
+            {formatDuration(effectiveResponse.timing.total_ms)}
+          </span>
+          <span className="text-xs text-adaka-muted">
+            {formatBytes(effectiveResponse.body_size)}
+          </span>
+        </div>
+      )}
+
+      {/* Tabs — always visible */}
       <div className="flex border-b border-adaka-border">
         {RESPONSE_TABS.map((tab) => (
           <button
@@ -91,29 +81,115 @@ export function ResponsePane() {
             onClick={() => setResponseTab(tab)}
           >
             {tab}
+            {tab === "history" && historyEntries.length > 0 && (
+              <span className="ml-1 text-adaka-faint">
+                ({historyEntries.length})
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {responseTab === "body" && (
-          <ResponseBody
-            body={response.body}
-            binary={response.binary}
-            truncated={response.truncated}
-            contentType={response.headers["content-type"] || ""}
-            pretty={prettyBody}
-            onTogglePretty={() => setPrettyBody(!prettyBody)}
-          />
-        )}
-        {responseTab === "headers" && (
-          <ResponseHeaders headers={response.headers} />
-        )}
-        {responseTab === "timing" && (
-          <TimingBars timing={response.timing} />
+      <div className="flex flex-1 flex-col overflow-auto">
+        {responseTab === "history" ? (
+          <HistoryPanel />
+        ) : sending ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex items-center gap-2 text-adaka-muted">
+              <svg
+                className="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="text-xs">Sending...</span>
+            </div>
+          </div>
+        ) : showError ? (
+          <ErrorPanel error={error} />
+        ) : effectiveResponse ? (
+          <>
+            {responseTab === "body" && (
+              <ResponseBody
+                body={effectiveResponse.body}
+                binary={effectiveResponse.binary}
+                truncated={effectiveResponse.truncated}
+                contentType={effectiveResponse.headers["content-type"] || ""}
+                pretty={prettyBody}
+                onTogglePretty={() => setPrettyBody(!prettyBody)}
+              />
+            )}
+            {responseTab === "headers" && (
+              <ResponseHeaders headers={effectiveResponse.headers} />
+            )}
+            {responseTab === "timing" && !viewingHistory && (
+              <TimingBars timing={effectiveResponse.timing} />
+            )}
+            {responseTab === "timing" && viewingHistory && (
+              <div className="flex flex-1 flex-col items-center justify-center px-4">
+                <p className="text-xs text-adaka-faint select-none">
+                  Detailed timing is not available for past responses
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-xs text-adaka-muted select-none">
+              Response will appear here
+            </p>
+            <p className="text-[11px] text-adaka-faint select-none">
+              Press{" "}
+              <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
+                Ctrl+↵
+              </kbd>{" "}
+              or click Send to make a request
+            </p>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const ts = parseInt(iso, 10);
+  if (isNaN(ts)) return iso;
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - ts;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(ts * 1000).toLocaleDateString();
+}
+
+function HistoryBanner({ startedAt, onReturn }: { startedAt: string; onReturn: () => void }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-amber-800/40 bg-amber-950/20 px-3 py-1.5">
+      <span className="text-xs text-amber-300">
+        Viewing past response — {relativeTime(startedAt)}
+      </span>
+      <button
+        className="ml-auto rounded border border-adaka-border px-2 py-0.5 text-xs text-adaka-muted hover:text-adaka-text"
+        onClick={onReturn}
+      >
+        Back to latest <kbd className="ml-1 text-[10px] opacity-60">Esc</kbd>
+      </button>
     </div>
   );
 }
@@ -197,7 +273,6 @@ function ResponseBody({
         <div className="border-b border-amber-800/50 bg-amber-950/30 px-3 py-1.5">
           <p className="text-xs text-amber-400">
             Response truncated at 5 MB.
-            {/* Save full response: M1.4 debt — streaming-save command needed */}
           </p>
         </div>
       )}

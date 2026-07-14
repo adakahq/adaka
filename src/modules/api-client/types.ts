@@ -91,6 +91,31 @@ export interface StructuredError {
   message: string;
 }
 
+export interface HistoryListEntry {
+  id: number;
+  method: string;
+  url_resolved: string;
+  status: number;
+  duration_ms: number;
+  response_size: number;
+  started_at: string;
+}
+
+export interface HistoryEntry {
+  id: number;
+  workspace_id: string;
+  request_path: string;
+  method: string;
+  url_resolved: string;
+  status: number;
+  duration_ms: number;
+  response_size: number;
+  started_at: string;
+  response_headers: string;
+  response_body: string;
+  request_snapshot: string;
+}
+
 export type HttpMethod =
   | "GET"
   | "POST"

@@ -21,6 +21,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
   const activeTab = useApiClientStore((s) => s.activeTab);
   const setActiveTab = useApiClientStore((s) => s.setActiveTab);
   const updateRequest = useApiClientStore((s) => s.updateRequest);
+  const viewingHistory = useApiClientStore((s) => s.viewingHistory);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const isDraft = activeRequest !== null && activeRequestPath === null;
@@ -44,6 +45,66 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
           </kbd>{" "}
           → "New request"
         </p>
+      </div>
+    );
+  }
+
+  if (viewingHistory) {
+    let snapshot: { method?: string; url?: string; headers?: Record<string, string>; query?: Record<string, string>; body?: string } = {};
+    try {
+      snapshot = JSON.parse(viewingHistory.request_snapshot || "{}") as typeof snapshot;
+    } catch { /* malformed snapshot — show what we can */ }
+
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-amber-800/40 bg-amber-950/20 px-3 py-1.5">
+          <span className="text-xs text-amber-300">Request as sent</span>
+        </div>
+        <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-2">
+          <span className="rounded bg-adaka-border px-2 py-0.5 text-xs font-bold text-adaka-text">
+            {snapshot.method ?? viewingHistory.method}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-adaka-muted" title={snapshot.url ?? viewingHistory.url_resolved}>
+            {snapshot.url ?? viewingHistory.url_resolved}
+          </span>
+        </div>
+        <div className="flex-1 overflow-auto p-3">
+          {snapshot.headers && Object.keys(snapshot.headers).length > 0 && (
+            <div className="mb-3">
+              <h4 className="mb-1 text-[10px] font-medium text-adaka-faint uppercase tracking-wide">Headers</h4>
+              <div className="space-y-0.5">
+                {Object.entries(snapshot.headers).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 text-xs">
+                    <span className="font-medium text-adaka-muted">{k}:</span>
+                    <span className="text-adaka-text break-all">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {snapshot.query && Object.keys(snapshot.query).length > 0 && (
+            <div className="mb-3">
+              <h4 className="mb-1 text-[10px] font-medium text-adaka-faint uppercase tracking-wide">Query</h4>
+              <div className="space-y-0.5">
+                {Object.entries(snapshot.query).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 text-xs">
+                    <span className="font-medium text-adaka-muted">{k}:</span>
+                    <span className="text-adaka-text break-all">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {snapshot.body && (
+            <div>
+              <h4 className="mb-1 text-[10px] font-medium text-adaka-faint uppercase tracking-wide">Body</h4>
+              <pre className="whitespace-pre-wrap font-mono text-xs text-adaka-text">{snapshot.body}</pre>
+            </div>
+          )}
+          {!snapshot.headers && !snapshot.query && !snapshot.body && !snapshot.url && (
+            <p className="text-xs text-adaka-faint">No snapshot available for this entry</p>
+          )}
+        </div>
       </div>
     );
   }

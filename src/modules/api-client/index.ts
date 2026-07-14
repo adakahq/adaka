@@ -25,6 +25,15 @@ const commands: PaletteCommand[] = [
     keywords: ["save", "write"],
     action: (ctx) => ctx.ui.openTab("main"),
   },
+  {
+    id: "api:show-history",
+    label: "Show request history",
+    keywords: ["history", "past", "responses"],
+    action: (ctx) => {
+      ctx.ui.openTab("main");
+      useApiClientStore.getState().setResponseTab("history");
+    },
+  },
 ];
 
 const apiClientModule: AdakaModule = {

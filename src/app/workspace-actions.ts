@@ -102,6 +102,29 @@ export async function createWorkspace(): Promise<void> {
   }
 }
 
+export async function quickCreateWorkspace(name: string): Promise<void> {
+  try {
+    const info = await invoke<WorkspaceInfo>("workspace_quick_create", { name });
+    useShellStore.getState().setWorkspace(info);
+    await notifyModules(info);
+    void addRecent({ name: info.name, path: info.root });
+  } catch (err: unknown) {
+    if (isStructuredError(err) && err.code === "ALREADY_EXISTS") {
+      useShellStore.getState().addToast(
+        `A workspace named "${name}" already exists — open it instead`,
+        "error",
+      );
+    } else {
+      const msg = isStructuredError(err) ? err.message : String(err);
+      useShellStore.getState().addToast(msg, "error");
+    }
+  }
+}
+
+export async function getDefaultWorkspaceDir(): Promise<string> {
+  return invoke<string>("workspace_default_dir");
+}
+
 export function closeWorkspace(): void {
   const store = useShellStore.getState();
   if (!store.workspace) return;

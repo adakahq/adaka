@@ -214,20 +214,22 @@ pub async fn api_cancel_request(request_id: String) -> Result<(), ApiClientError
 
 #[tauri::command]
 pub fn api_history_list(
-    app_data_dir: String,
-    workspace_id: String,
+    workspace_path: String,
     request_path: String,
-) -> Result<Vec<history::HistoryEntry>, ApiClientError> {
-    let db = history::HistoryDb::open(&std::path::PathBuf::from(&app_data_dir))?;
-    db.list(&workspace_id, &request_path)
+) -> Result<Vec<history::HistoryListEntry>, ApiClientError> {
+    let history_dir = Path::new(&workspace_path).join(".adaka").join("history");
+    let workspace_id = workspace_id_from_path(&workspace_path);
+    let db = history::HistoryDb::open(&history_dir)?;
+    db.list_summary(&workspace_id, &request_path)
 }
 
 #[tauri::command]
 pub fn api_history_get(
-    app_data_dir: String,
+    workspace_path: String,
     id: i64,
 ) -> Result<Option<history::HistoryEntry>, ApiClientError> {
-    let db = history::HistoryDb::open(&std::path::PathBuf::from(&app_data_dir))?;
+    let history_dir = Path::new(&workspace_path).join(".adaka").join("history");
+    let db = history::HistoryDb::open(&history_dir)?;
     db.get(id)
 }
 

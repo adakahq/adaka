@@ -37,6 +37,7 @@ interface ShellState {
   toasts: Toast[];
   moduleContexts: Map<string, ModuleContext>;
   confirm: ConfirmPanel | null;
+  showQuickCreate: boolean;
 
   setWorkspace: (ws: WorkspaceInfo | null) => void;
   setTheme: (t: Theme) => void;
@@ -51,6 +52,7 @@ interface ShellState {
   setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
   showConfirm: (panel: ConfirmPanel) => void;
   dismissConfirm: () => void;
+  setShowQuickCreate: (show: boolean) => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
@@ -64,6 +66,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   toasts: [],
   moduleContexts: new Map(),
   confirm: null,
+  showQuickCreate: false,
 
   setWorkspace: (ws) => set({ workspace: ws }),
   setTheme: (t) => set({ theme: t }),
@@ -106,4 +109,5 @@ export const useShellStore = create<ShellState>((set, get) => ({
   setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
   showConfirm: (panel) => set({ confirm: panel }),
   dismissConfirm: () => set({ confirm: null }),
+  setShowQuickCreate: (show) => set({ showQuickCreate: show }),
 }));
