@@ -197,6 +197,10 @@ export function ApiClientRoute() {
         e.preventDefault();
         if (dirty) void saveRequest();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "h") {
+        e.preventDefault();
+        useApiClientStore.getState().setResponseTab("history");
+      }
       if (e.key === "Escape") {
         const { viewingHistory } = useApiClientStore.getState();
         if (viewingHistory) {

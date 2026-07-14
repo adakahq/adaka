@@ -73,9 +73,12 @@ export function WelcomeScreen() {
   }, [wsName]);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-8 px-4 text-adaka-muted">
-      {/* Logo and identity */}
-      <div className="text-center">
+    <div className="flex h-full flex-col text-adaka-muted">
+      {/* Top spacer — pushes content toward vertical center on tall windows */}
+      <div className="flex-1 min-h-6" />
+
+      {/* Fixed identity header */}
+      <div className="shrink-0 text-center px-4">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-adaka-gold text-2xl font-bold text-adaka-on-gold select-none">
           A
         </div>
@@ -89,50 +92,8 @@ export function WelcomeScreen() {
         </p>
       </div>
 
-      {/* Recent workspaces */}
-      {recents.length > 0 && (
-        <div className="w-full max-w-sm">
-          <h2 className="mb-2 px-1 text-xs font-medium text-adaka-faint uppercase tracking-wide">
-            Recent workspaces
-          </h2>
-          <div className="rounded-lg border border-adaka-border bg-adaka-chrome">
-            {recents.map((r, i) => (
-              <button
-                key={r.path}
-                className={`group flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-adaka-border ${
-                  i > 0 ? "border-t border-adaka-border" : ""
-                }`}
-                onClick={() => handleOpen(r.path)}
-                title={r.path}
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-adaka-border text-xs font-bold text-adaka-text select-none">
-                  {r.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-adaka-text">
-                    {r.name}
-                  </p>
-                  <p className="truncate text-[10px] text-adaka-faint" title={r.path}>
-                    {r.path}
-                  </p>
-                </div>
-                <span
-                  className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-border-strong hover:text-adaka-text group-hover:flex"
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(e) => void handleRemove(e, r.path)}
-                  title="Remove from recents"
-                >
-                  &times;
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex w-full max-w-sm flex-col items-center gap-3">
+      {/* Fixed action buttons — always visible, never displaced */}
+      <div className="shrink-0 flex flex-col items-center gap-3 px-4 mt-8">
         {!showCreate ? (
           <>
             <div className="flex gap-3">
@@ -154,7 +115,7 @@ export function WelcomeScreen() {
             </p>
           </>
         ) : (
-          <div className="w-full rounded-lg border border-adaka-border bg-adaka-chrome p-4">
+          <div className="w-full max-w-sm rounded-lg border border-adaka-border bg-adaka-chrome p-4">
             <h3 className="mb-3 text-xs font-medium text-adaka-text">Name your workspace</h3>
             <input
               ref={nameInputRef}
@@ -217,25 +178,75 @@ export function WelcomeScreen() {
         )}
       </div>
 
-      {/* Footer hints */}
-      <p className="text-xs text-adaka-faint">
-        <kbd className="rounded border border-adaka-border px-1.5 py-0.5 text-[10px] text-adaka-muted">
-          {formatKey("Ctrl+K")}
-        </kbd>{" "}
-        command palette{" "}
-        <span className="mx-1.5 text-adaka-border">·</span>
-        <kbd className="rounded border border-adaka-border px-1.5 py-0.5 text-[10px] text-adaka-muted">
-          {formatKey("Ctrl+/")}
-        </kbd>{" "}
-        shortcuts
-      </p>
+      {/* Scrollable recents region — capped height, fades when scrolled */}
+      {recents.length > 0 ? (
+        <div className="shrink-0 flex justify-center px-4 mt-6">
+          <div className="w-full max-w-sm">
+            <h2 className="mb-2 px-1 text-xs font-medium text-adaka-faint uppercase tracking-wide">
+              Recent workspaces
+            </h2>
+            <div className="relative">
+              <div className="max-h-[220px] overflow-y-auto rounded-lg border border-adaka-border bg-adaka-chrome">
+                {recents.map((r, i) => (
+                  <button
+                    key={r.path}
+                    className={`group flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-adaka-border ${
+                      i > 0 ? "border-t border-adaka-border" : ""
+                    }`}
+                    onClick={() => handleOpen(r.path)}
+                    title={r.path}
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-adaka-border text-xs font-bold text-adaka-text select-none">
+                      {r.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-adaka-text">
+                        {r.name}
+                      </p>
+                      <p className="truncate text-[10px] text-adaka-faint" title={r.path}>
+                        {r.path}
+                      </p>
+                    </div>
+                    <span
+                      className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-border-strong hover:text-adaka-text group-hover:flex"
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => void handleRemove(e, r.path)}
+                      title="Remove from recents"
+                    >
+                      &times;
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : !showCreate ? (
+        <div className="shrink-0 flex justify-center mt-6">
+          <p className="text-xs text-adaka-faint">
+            Workspaces you open will appear here
+          </p>
+        </div>
+      ) : null}
 
-      {/* Empty recents message */}
-      {recents.length === 0 && !showCreate && (
+      {/* Bottom spacer */}
+      <div className="flex-1 min-h-6" />
+
+      {/* Footer hints — pinned bottom */}
+      <div className="shrink-0 pb-4 text-center">
         <p className="text-xs text-adaka-faint">
-          Workspaces you open will appear here
+          <kbd className="rounded border border-adaka-border px-1.5 py-0.5 text-[10px] text-adaka-muted">
+            {formatKey("Ctrl+K")}
+          </kbd>{" "}
+          command palette{" "}
+          <span className="mx-1.5 text-adaka-border">·</span>
+          <kbd className="rounded border border-adaka-border px-1.5 py-0.5 text-[10px] text-adaka-muted">
+            {formatKey("Ctrl+/")}
+          </kbd>{" "}
+          shortcuts
         </p>
-      )}
+      </div>
     </div>
   );
 }

@@ -460,9 +460,10 @@ pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), Works
 #[tauri::command]
 pub fn workspace_default_dir(app: tauri::AppHandle) -> Result<String, WorkspaceError> {
     use tauri::Manager;
-    let docs = app.path().document_dir().map_err(|e| {
-        WorkspaceError::Io(std::io::Error::other(e.to_string()))
-    })?;
+    let docs = app
+        .path()
+        .document_dir()
+        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
     Ok(docs.join("Adaka").to_string_lossy().to_string())
 }
 
@@ -483,9 +484,10 @@ pub fn workspace_quick_create(
             "name contains characters not allowed in folder names: {name}"
         )));
     }
-    let docs = app.path().document_dir().map_err(|e| {
-        WorkspaceError::Io(std::io::Error::other(e.to_string()))
-    })?;
+    let docs = app
+        .path()
+        .document_dir()
+        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
     let ws_root = docs.join("Adaka").join(&name);
     if ws_root.exists() {
         return Err(WorkspaceError::AlreadyExists(ws_root));

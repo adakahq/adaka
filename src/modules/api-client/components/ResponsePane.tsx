@@ -17,39 +17,6 @@ export function ResponsePane() {
   const setViewingHistory = useApiClientStore((s) => s.setViewingHistory);
   const historyEntries = useApiClientStore((s) => s.historyEntries);
 
-  if (sending) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-adaka-muted">
-          <svg
-            className="h-4 w-4 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span className="text-xs">Sending...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !viewingHistory) {
-    return <ErrorPanel error={error} />;
-  }
-
   // Determine effective response data: historical or live
   const effectiveResponse = viewingHistory
     ? {
@@ -73,44 +40,8 @@ export function ResponsePane() {
       }
     : response;
 
-  if (!effectiveResponse && responseTab !== "history") {
-    return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex border-b border-adaka-border">
-          {RESPONSE_TABS.map((tab) => (
-            <button
-              key={tab}
-              className={`px-3 py-1.5 text-xs capitalize ${
-                responseTab === tab
-                  ? "border-b-2 border-adaka-gold text-adaka-text"
-                  : "text-adaka-muted hover:text-adaka-text"
-              }`}
-              onClick={() => setResponseTab(tab)}
-            >
-              {tab}
-              {tab === "history" && historyEntries.length > 0 && (
-                <span className="ml-1 text-adaka-faint">
-                  ({historyEntries.length})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <p className="text-xs text-adaka-muted select-none">
-            Response will appear here
-          </p>
-          <p className="text-[11px] text-adaka-faint select-none">
-            Press{" "}
-            <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
-              Ctrl+↵
-            </kbd>{" "}
-            or click Send to make a request
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const showStatusLine = effectiveResponse && !sending;
+  const showError = error && !viewingHistory && !sending;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -123,7 +54,7 @@ export function ResponsePane() {
       )}
 
       {/* Status line */}
-      {effectiveResponse && (
+      {showStatusLine && (
         <div className="flex items-center gap-3 border-b border-adaka-border px-3 py-2">
           <span className={`text-sm font-bold ${statusColor(effectiveResponse.status)}`}>
             {effectiveResponse.status} {effectiveResponse.status_text}
@@ -137,7 +68,7 @@ export function ResponsePane() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — always visible */}
       <div className="flex border-b border-adaka-border">
         {RESPONSE_TABS.map((tab) => (
           <button
@@ -163,6 +94,33 @@ export function ResponsePane() {
       <div className="flex flex-1 flex-col overflow-auto">
         {responseTab === "history" ? (
           <HistoryPanel />
+        ) : sending ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex items-center gap-2 text-adaka-muted">
+              <svg
+                className="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="text-xs">Sending...</span>
+            </div>
+          </div>
+        ) : showError ? (
+          <ErrorPanel error={error} />
         ) : effectiveResponse ? (
           <>
             {responseTab === "body" && (
@@ -189,7 +147,20 @@ export function ResponsePane() {
               </div>
             )}
           </>
-        ) : null}
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-xs text-adaka-muted select-none">
+              Response will appear here
+            </p>
+            <p className="text-[11px] text-adaka-faint select-none">
+              Press{" "}
+              <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
+                Ctrl+↵
+              </kbd>{" "}
+              or click Send to make a request
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -217,7 +188,7 @@ function HistoryBanner({ startedAt, onReturn }: { startedAt: string; onReturn: (
         className="ml-auto rounded border border-adaka-border px-2 py-0.5 text-xs text-adaka-muted hover:text-adaka-text"
         onClick={onReturn}
       >
-        Return to live <kbd className="ml-1 text-[10px] opacity-60">Esc</kbd>
+        Back to latest <kbd className="ml-1 text-[10px] opacity-60">Esc</kbd>
       </button>
     </div>
   );
