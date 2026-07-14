@@ -8,9 +8,12 @@ import { formatError } from "../../../shared/formatError";
 interface Props {
   onSelect: (path: string) => void;
   onTreeChanged: () => void;
+  onImport?: () => void;
+  onCopyAsCurl?: () => void;
+  importing?: boolean;
 }
 
-export function CollectionTree({ onSelect, onTreeChanged }: Props) {
+export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl, importing }: Props) {
   const ctx = useModuleContext();
   const tree = useApiClientStore((s) => s.tree);
   const activeRequestPath = useApiClientStore((s) => s.activeRequestPath);
@@ -375,11 +378,24 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
             >
               + New request
             </button>
+            {onImport && (
+              <button
+                className="rounded border border-adaka-border px-3 py-2 text-xs text-adaka-muted hover:border-adaka-muted hover:text-adaka-text disabled:opacity-50"
+                onClick={onImport}
+                disabled={importing}
+              >
+                {importing ? "Importing…" : "Import from Postman"}
+              </button>
+            )}
             <p className="text-xs leading-relaxed text-adaka-faint">
               Requests are plain TOML files in{" "}
               <code className="rounded bg-adaka-border px-1 py-0.5 text-[10px]">
                 .adaka/requests/
               </code>
+              <br />
+              <span className="text-adaka-faint">
+                Paste a <code className="text-[10px]">curl</code> command into the URL bar to import it
+              </span>
             </p>
           </div>
         ) : (
@@ -414,6 +430,17 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
             >
               New Folder
             </button>
+            {onImport && (
+              <button
+                className="block w-full px-3 py-1 text-left text-xs text-adaka-text hover:bg-adaka-border"
+                onClick={() => {
+                  closeMenu();
+                  onImport();
+                }}
+              >
+                Import from Postman…
+              </button>
+            )}
             {contextMenu.node && (
               <>
                 <div className="my-1 border-t border-adaka-border" />
@@ -426,6 +453,20 @@ export function CollectionTree({ onSelect, onTreeChanged }: Props) {
                   >
                     Rename
                     <span className="float-right text-adaka-faint">F2</span>
+                  </button>
+                )}
+                {contextMenu.node.type === "request" && onCopyAsCurl && (
+                  <button
+                    className="block w-full px-3 py-1 text-left text-xs text-adaka-text hover:bg-adaka-border"
+                    onClick={() => {
+                      closeMenu();
+                      if (contextMenu.node) {
+                        onSelect(contextMenu.node.path);
+                        setTimeout(() => onCopyAsCurl(), 100);
+                      }
+                    }}
+                  >
+                    Copy as cURL
                   </button>
                 )}
                 <button

@@ -116,6 +116,27 @@ export interface HistoryEntry {
   request_snapshot: string;
 }
 
+export interface ImportReport {
+  imported_count: number;
+  skipped: SkippedItem[];
+  generated_env: string | null;
+  files_written: string[];
+}
+
+export interface SkippedItem {
+  name: string;
+  reason: string;
+}
+
+export interface CurlParseResult {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string | null;
+  body_type: string;
+  warnings: string[];
+}
+
 export type HttpMethod =
   | "GET"
   | "POST"

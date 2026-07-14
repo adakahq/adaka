@@ -1,5 +1,6 @@
 pub mod format;
 pub mod history;
+pub mod import;
 pub mod inheritance;
 pub mod send;
 pub mod tree;
@@ -30,6 +31,8 @@ pub enum ApiClientError {
     Tls(String),
     #[error("request cancelled: {0}")]
     Cancelled(String),
+    #[error("import error: {0}")]
+    Import(String),
     #[error("{0}")]
     Workspace(#[from] workspace::WorkspaceError),
     #[error("{0}")]
@@ -47,6 +50,7 @@ impl ApiClientError {
             Self::Timeout(_) => "TIMEOUT",
             Self::Tls(_) => "TLS",
             Self::Cancelled(_) => "CANCELLED",
+            Self::Import(_) => "IMPORT",
             Self::Workspace(e) => e.code(),
             Self::Env(_) => "ENV",
         }
@@ -231,6 +235,59 @@ pub fn api_history_get(
     let history_dir = Path::new(&workspace_path).join(".adaka").join("history");
     let db = history::HistoryDb::open(&history_dir)?;
     db.get(id)
+}
+
+// ---------------------------------------------------------------------------
+// Import commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn api_import_postman(
+    workspace_path: String,
+    file_path: String,
+    target_folder: String,
+) -> Result<import::ImportReport, ApiClientError> {
+    let root = Path::new(&workspace_path);
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| ApiClientError::FileNotFound(format!("{file_path}: {e}")))?;
+    import::import_postman(root, &content, &target_folder).map_err(|detail| ApiClientError::Parse {
+        file: file_path,
+        detail,
+    })
+}
+
+#[tauri::command]
+pub fn api_parse_curl(input: String) -> Result<import::CurlParseResult, ApiClientError> {
+    import::parse_curl(&input).map_err(|detail| ApiClientError::Parse {
+        file: "curl".to_string(),
+        detail,
+    })
+}
+
+#[tauri::command]
+pub fn api_export_curl(
+    workspace_path: String,
+    request_path: String,
+    env_name: Option<String>,
+) -> Result<String, ApiClientError> {
+    let root = Path::new(&workspace_path);
+    let raw = workspace::read_file(root, &request_path)?;
+    let req =
+        format::parse_request(&raw, &request_path).map_err(|detail| ApiClientError::Parse {
+            file: request_path.clone(),
+            detail,
+        })?;
+
+    // If env is provided, try to resolve the URL for the export
+    let resolved_url = if let Some(ref env_name) = env_name {
+        env::load_environment(root, env_name)
+            .ok()
+            .and_then(|e| env::resolve(&req.url, &e).ok())
+    } else {
+        None
+    };
+
+    Ok(import::export_curl(&req, resolved_url.as_deref()))
 }
 
 // ---------------------------------------------------------------------------
