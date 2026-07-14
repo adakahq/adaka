@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
 import { useShellStore } from "./store";
-import { openWorkspace, createWorkspace } from "./workspace-actions";
+import { openWorkspace, createWorkspace, closeWorkspace } from "./workspace-actions";
 
 interface ResolvedCommand {
   cmd: PaletteCommand;
@@ -96,15 +96,28 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const moduleContexts = useShellStore((s) => s.moduleContexts);
+  const workspace = useShellStore((s) => s.workspace);
 
   const allCommands = useMemo(() => {
     if (!open) return [];
+    const builtins = builtinCommands();
+    if (!workspace) return builtins;
+    builtins.push({
+      cmd: {
+        id: "builtin:close-workspace",
+        label: "Close workspace",
+        keywords: ["exit", "leave"],
+        action: () => closeWorkspace(),
+      },
+      ctx: null,
+      moduleId: null,
+    });
     const moduleResolved: ResolvedCommand[] = getModules().flatMap((m) => {
       const ctx = moduleContexts.get(m.id) ?? null;
       return m.commands.map((cmd) => ({ cmd, ctx, moduleId: m.id }));
     });
-    return [...builtinCommands(), ...moduleResolved];
-  }, [open, moduleContexts]);
+    return [...builtins, ...moduleResolved];
+  }, [open, moduleContexts, workspace]);
 
   const filtered = useMemo(() => {
     if (!query) return allCommands;
@@ -127,16 +140,22 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const addToast = useShellStore((s) => s.addToast);
+
   const run = useCallback(
     (rc: ResolvedCommand) => {
       setPaletteOpen(false);
+      if (rc.moduleId && !workspace) {
+        addToast("Open a workspace first", "error");
+        return;
+      }
       if (rc.ctx) {
         rc.cmd.action(rc.ctx);
       } else {
         rc.cmd.action(null as unknown as ModuleContext);
       }
     },
-    [setPaletteOpen],
+    [setPaletteOpen, workspace, addToast],
   );
 
   const onKeyDown = useCallback(
@@ -195,6 +214,17 @@ export function CommandPalette() {
               {highlightFuzzy(i === selectedIdx ? "" : query, rc.cmd.label)}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-3 border-t border-adaka-border px-4 py-1.5">
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">↑↓</kbd> navigate
+          </span>
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">↵</kbd> run
+          </span>
+          <span className="text-[10px] text-adaka-faint">
+            <kbd className="text-adaka-muted">Esc</kbd> close
+          </span>
         </div>
       </div>
     </div>

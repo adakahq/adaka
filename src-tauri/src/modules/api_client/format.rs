@@ -183,6 +183,132 @@ pub fn parse_collection(raw: &str, _file_hint: &str) -> Result<CollectionConfig,
     Ok(config)
 }
 
+// ---------------------------------------------------------------------------
+// Serialization — merge DTO onto existing document (preserves comments/unknown keys)
+// ---------------------------------------------------------------------------
+
+pub fn serialize_request(def: &RequestFile, existing: Option<&str>) -> Result<String, String> {
+    let mut doc = match existing {
+        Some(raw) => raw.parse::<DocumentMut>().map_err(|e| e.to_string())?,
+        None => DocumentMut::new(),
+    };
+
+    // Top-level scalars — always present
+    doc["version"] = toml_edit::value(def.version);
+    doc["name"] = toml_edit::value(def.name.as_str());
+    doc["method"] = toml_edit::value(def.method.as_str());
+    doc["url"] = toml_edit::value(def.url.as_str());
+
+    // Map sections — remove if empty, replace if present
+    apply_string_table(&mut doc, "headers", &def.headers);
+    apply_string_table(&mut doc, "headers_disabled", &def.headers_disabled);
+    apply_string_table(&mut doc, "query", &def.query);
+    apply_string_table(&mut doc, "query_disabled", &def.query_disabled);
+
+    // [auth] — omit when type=inherit (the default)
+    if def.auth.auth_type == "inherit" {
+        doc.remove("auth");
+    } else {
+        let mut t = toml_edit::Table::new();
+        t["type"] = toml_edit::value(def.auth.auth_type.as_str());
+        if let Some(v) = &def.auth.token {
+            t["token"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.auth.username {
+            t["username"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.auth.password {
+            t["password"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.auth.key {
+            t["key"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.auth.value {
+            t["value"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.auth.location {
+            t["in"] = toml_edit::value(v.as_str());
+        }
+        doc["auth"] = toml_edit::Item::Table(t);
+    }
+
+    // [body] — omit when type=none (the default)
+    if def.body.body_type == "none" {
+        doc.remove("body");
+    } else {
+        let mut t = toml_edit::Table::new();
+        t["type"] = toml_edit::value(def.body.body_type.as_str());
+        if let Some(v) = &def.body.content {
+            t["content"] = toml_edit::value(v.as_str());
+        }
+        if let Some(v) = &def.body.content_type {
+            t["content_type"] = toml_edit::value(v.as_str());
+        }
+        if !def.body.fields.is_empty() {
+            let mut arr = toml_edit::Array::new();
+            for field in &def.body.fields {
+                let mut it = toml_edit::InlineTable::new();
+                it.insert("name", field.name.as_str().into());
+                it.insert("value", field.value.as_str().into());
+                if !field.enabled {
+                    it.insert("enabled", false.into());
+                }
+                arr.push(toml_edit::Value::InlineTable(it));
+            }
+            t["fields"] = toml_edit::Item::Value(toml_edit::Value::Array(arr));
+        }
+        doc["body"] = toml_edit::Item::Table(t);
+    }
+
+    // [settings] — omit when all defaults
+    let s = &def.settings;
+    if s.timeout_ms == 30_000 && s.follow_redirects && s.verify_tls {
+        doc.remove("settings");
+    } else {
+        let mut t = toml_edit::Table::new();
+        if s.timeout_ms != 30_000 {
+            t["timeout_ms"] = toml_edit::value(s.timeout_ms as i64);
+        }
+        if !s.follow_redirects {
+            t["follow_redirects"] = toml_edit::value(false);
+        }
+        if !s.verify_tls {
+            t["verify_tls"] = toml_edit::value(false);
+        }
+        doc["settings"] = toml_edit::Item::Table(t);
+    }
+
+    // [tests] — omit when no assertions defined
+    match def.tests.status {
+        None => {
+            doc.remove("tests");
+        }
+        Some(code) => {
+            let mut t = toml_edit::Table::new();
+            t["status"] = toml_edit::value(code as i64);
+            doc["tests"] = toml_edit::Item::Table(t);
+        }
+    }
+
+    Ok(doc.to_string())
+}
+
+fn apply_string_table(doc: &mut DocumentMut, key: &str, map: &BTreeMap<String, String>) {
+    if map.is_empty() {
+        doc.remove(key);
+    } else {
+        let mut t = toml_edit::Table::new();
+        for (k, v) in map {
+            t[k.as_str()] = toml_edit::value(v.as_str());
+        }
+        doc[key] = toml_edit::Item::Table(t);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 fn filename_stem(path: &str) -> String {
     let fname = path.rsplit('/').next().unwrap_or(path);
     let fname = fname.rsplit('\\').next().unwrap_or(fname);
@@ -271,6 +397,103 @@ key = "value"
             Some("should survive")
         );
         assert!(doc.get("future_section").is_some());
+    }
+
+    fn default_request() -> RequestFile {
+        RequestFile {
+            version: 1,
+            name: "Test".to_string(),
+            method: "GET".to_string(),
+            url: "http://example.com".to_string(),
+            headers: BTreeMap::new(),
+            headers_disabled: BTreeMap::new(),
+            query: BTreeMap::new(),
+            query_disabled: BTreeMap::new(),
+            auth: AuthConfig::default(),
+            body: BodyConfig::default(),
+            settings: RequestSettings::default(),
+            tests: TestsConfig::default(),
+        }
+    }
+
+    #[test]
+    fn serialize_preserves_comments_and_unknown_keys() {
+        let existing = "# My hand-written note\nversion = 1\nname = \"Test\"\nmethod = \"GET\"\nurl = \"http://example.com\"\ncustom_field = \"should survive\"\n\n[future_section]\nkey = \"value\"\n";
+        let mut def = default_request();
+        def.method = "POST".to_string();
+
+        let result = serialize_request(&def, Some(existing)).unwrap();
+        assert!(result.contains("method = \"POST\""));
+        assert!(result.contains("# My hand-written note"));
+        assert!(result.contains("custom_field = \"should survive\""));
+        assert!(result.contains("[future_section]"));
+        assert!(result.contains("key = \"value\""));
+
+        let parsed = parse_request(&result, "test.req.toml").unwrap();
+        assert_eq!(parsed.method, "POST");
+    }
+
+    #[test]
+    fn serialize_method_change_with_unset_tests() {
+        let mut def = default_request();
+        def.method = "PUT".to_string();
+        def.tests = TestsConfig { status: None };
+
+        let result = serialize_request(&def, None).unwrap();
+        assert!(result.contains("method = \"PUT\""));
+        assert!(!result.contains("[tests]"));
+
+        let parsed = parse_request(&result, "test.req.toml").unwrap();
+        assert_eq!(parsed.method, "PUT");
+        assert_eq!(parsed.tests.status, None);
+    }
+
+    #[test]
+    fn serialize_new_file_canonical_shape() {
+        let mut headers = BTreeMap::new();
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        let def = RequestFile {
+            version: 1,
+            name: "Create User".to_string(),
+            method: "POST".to_string(),
+            url: "{{BASE_URL}}/users".to_string(),
+            headers,
+            headers_disabled: BTreeMap::new(),
+            query: BTreeMap::new(),
+            query_disabled: BTreeMap::new(),
+            auth: AuthConfig {
+                auth_type: "bearer".to_string(),
+                token: Some("{{API_TOKEN}}".to_string()),
+                ..AuthConfig::default()
+            },
+            body: BodyConfig {
+                body_type: "json".to_string(),
+                content: Some(r#"{ "name": "Ama" }"#.to_string()),
+                ..BodyConfig::default()
+            },
+            settings: RequestSettings::default(),
+            tests: TestsConfig { status: Some(201) },
+        };
+
+        let result = serialize_request(&def, None).unwrap();
+        let parsed = parse_request(&result, "test.req.toml").unwrap();
+        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.name, "Create User");
+        assert_eq!(parsed.method, "POST");
+        assert_eq!(parsed.url, "{{BASE_URL}}/users");
+        assert_eq!(
+            parsed.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(parsed.auth.auth_type, "bearer");
+        assert_eq!(parsed.auth.token, Some("{{API_TOKEN}}".to_string()));
+        assert_eq!(parsed.body.body_type, "json");
+        assert_eq!(
+            parsed.body.content,
+            Some(r#"{ "name": "Ama" }"#.to_string())
+        );
+        assert_eq!(parsed.tests.status, Some(201));
     }
 
     #[test]

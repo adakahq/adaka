@@ -281,6 +281,19 @@ pub async fn prepare(
     // 4. Resolve variables — UNRESOLVED_VAR error before network
     let url_result = resolve_traced(&req.url, &env_ctx)?;
 
+    // 5. Validate URL structure before any network I/O
+    if let Err(e) = url::Url::parse(&url_result.resolved) {
+        let hint = if !url_result.resolved.contains("://") {
+            format!(
+                "\"{}\" is not a valid URL — it needs a scheme, e.g. http://{}",
+                url_result.redacted, url_result.redacted
+            )
+        } else {
+            format!("\"{}\" is not a valid URL: {}", url_result.redacted, e)
+        };
+        return Err(ApiClientError::InvalidUrl(hint));
+    }
+
     let mut headers_resolved: Vec<(String, String)> = Vec::new();
     let mut headers_redacted: Vec<(String, String)> = Vec::new();
     for (k, v) in &req.headers {
@@ -722,6 +735,18 @@ pub fn prepare_with_ctx(
 
     let url_result = resolve_traced(&req.url, &ctx)?;
 
+    if let Err(e) = url::Url::parse(&url_result.resolved) {
+        let hint = if !url_result.resolved.contains("://") {
+            format!(
+                "\"{}\" is not a valid URL — it needs a scheme, e.g. http://{}",
+                url_result.redacted, url_result.redacted
+            )
+        } else {
+            format!("\"{}\" is not a valid URL: {}", url_result.redacted, e)
+        };
+        return Err(ApiClientError::InvalidUrl(hint));
+    }
+
     let mut headers_resolved: Vec<(String, String)> = Vec::new();
     let mut headers_redacted: Vec<(String, String)> = Vec::new();
     for (k, v) in &req.headers {
@@ -816,6 +841,31 @@ pub fn prepare_with_ctx(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schemeless_url_returns_invalid_url_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("URLTest")).unwrap();
+
+        let req_content =
+            "version = 1\nname = \"bad\"\nmethod = \"GET\"\nurl = \"example.com/api\"\n";
+        crate::core::workspace::write_file(tmp.path(), "requests/bad.req.toml", req_content)
+            .unwrap();
+
+        let ctx = EnvContext::empty();
+        let err = prepare_with_ctx(tmp.path().to_str().unwrap(), "requests/bad.req.toml", ctx)
+            .unwrap_err();
+
+        assert!(
+            matches!(err, ApiClientError::InvalidUrl(_)),
+            "expected InvalidUrl, got: {err}"
+        );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("http://"),
+            "error should suggest adding http://: {msg}"
+        );
+    }
 
     #[test]
     fn resolve_all_vars_basic() {

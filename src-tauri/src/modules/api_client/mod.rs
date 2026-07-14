@@ -20,6 +20,8 @@ pub enum ApiClientError {
     Parse { file: String, detail: String },
     #[error("unresolved variable: {0}")]
     UnresolvedVar(String),
+    #[error("invalid URL: {0}")]
+    InvalidUrl(String),
     #[error("network error: {0}")]
     Network(String),
     #[error("request timed out: {0}")]
@@ -40,6 +42,7 @@ impl ApiClientError {
             Self::FileNotFound(_) => "FILE",
             Self::Parse { .. } => "PARSE",
             Self::UnresolvedVar(_) => "UNRESOLVED_VAR",
+            Self::InvalidUrl(_) => "INVALID_URL",
             Self::Network(_) => "NETWORK",
             Self::Timeout(_) => "TIMEOUT",
             Self::Tls(_) => "TLS",
@@ -96,6 +99,28 @@ pub fn api_parse_collection(
         file: collection_path,
         detail,
     })
+}
+
+#[tauri::command]
+pub fn api_save_request(
+    workspace_path: String,
+    request_path: String,
+    def: format::RequestFile,
+) -> Result<(), ApiClientError> {
+    let root = Path::new(&workspace_path);
+
+    // Load existing content to preserve comments and unknown keys
+    let existing = workspace::read_file(root, &request_path).ok();
+
+    let toml = format::serialize_request(&def, existing.as_deref()).map_err(|detail| {
+        ApiClientError::Parse {
+            file: request_path.clone(),
+            detail,
+        }
+    })?;
+
+    workspace::write_file(root, &request_path, &toml)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -262,6 +287,14 @@ mod tests {
         let v = serialize_error(&e);
         assert_eq!(v["code"], "UNRESOLVED_VAR");
         assert!(v["message"].as_str().unwrap().contains("MISSING_VAR"));
+    }
+
+    #[test]
+    fn error_invalid_url_code() {
+        let e = ApiClientError::InvalidUrl("missing scheme".into());
+        let v = serialize_error(&e);
+        assert_eq!(v["code"], "INVALID_URL");
+        assert!(v["message"].as_str().unwrap().contains("missing scheme"));
     }
 
     #[test]

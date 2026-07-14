@@ -41,6 +41,7 @@ export function UrlBar({
         className="rounded border border-adaka-border bg-adaka-chrome px-2 py-1 text-xs font-bold text-adaka-text focus:border-adaka-gold focus:outline-none"
         value={method}
         onChange={(e) => onMethodChange(e.target.value)}
+        title="HTTP method"
       >
         {METHODS.map((m) => (
           <option key={m} value={m}>
@@ -73,6 +74,7 @@ export function UrlBar({
           title="Save (Ctrl+S)"
         >
           Save
+          <kbd className="ml-1.5 text-[10px] opacity-60">Ctrl+S</kbd>
         </button>
       )}
 
@@ -86,6 +88,7 @@ export function UrlBar({
         title={sending ? "Cancel (Ctrl+Enter)" : "Send (Ctrl+Enter)"}
       >
         {sending ? "Cancel" : "Send"}
+        <kbd className="ml-1.5 text-[10px] opacity-60">Ctrl+↵</kbd>
       </button>
     </div>
   );

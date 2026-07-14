@@ -33,6 +33,7 @@ interface ShellState {
   tabs: Tab[];
   activeTabId: string | null;
   paletteOpen: boolean;
+  shortcutsOpen: boolean;
   toasts: Toast[];
   moduleContexts: Map<string, ModuleContext>;
   confirm: ConfirmPanel | null;
@@ -44,6 +45,7 @@ interface ShellState {
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
+  setShortcutsOpen: (open: boolean) => void;
   addToast: (msg: string, kind?: ToastKind) => void;
   removeToast: (id: number) => void;
   setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
@@ -58,6 +60,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   paletteOpen: false,
+  shortcutsOpen: false,
   toasts: [],
   moduleContexts: new Map(),
   confirm: null,
@@ -89,6 +92,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
 
   addToast: (msg, kind = "info") => {
     const id = ++toastSeq;

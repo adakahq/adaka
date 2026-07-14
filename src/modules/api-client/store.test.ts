@@ -122,6 +122,38 @@ describe("useApiClientStore", () => {
     expect(state.dirty).toBe(false);
   });
 
+  test("createDraft DTO has no null members", () => {
+    useApiClientStore.getState().createDraft();
+    const req = useApiClientStore.getState().activeRequest;
+    if (!req) throw new Error("expected activeRequest");
+
+    // Top-level required fields must be strings, not null
+    expect(typeof req.version).toBe("number");
+    expect(typeof req.name).toBe("string");
+    expect(typeof req.method).toBe("string");
+    expect(typeof req.url).toBe("string");
+
+    // Maps must be objects, not null
+    expect(req.headers).toEqual({});
+    expect(req.headers_disabled).toEqual({});
+    expect(req.query).toEqual({});
+    expect(req.query_disabled).toEqual({});
+
+    // Sub-objects must be objects with type field, not null
+    expect(req.auth).toBeDefined();
+    expect(typeof req.auth.type).toBe("string");
+    expect(req.body).toBeDefined();
+    expect(typeof req.body.type).toBe("string");
+    expect(req.settings).toBeDefined();
+    expect(typeof req.settings.timeout_ms).toBe("number");
+    expect(req.tests).toBeDefined();
+
+    // Optional fields may be undefined but never null
+    expect(req.auth.token).not.toBe(null);
+    expect(req.body.content).not.toBe(null);
+    expect(req.tests.status).not.toBe(null);
+  });
+
   test("serialized TOML contains current URL, not stale value", () => {
     useApiClientStore.getState().setActiveRequest(blankRequest({ url: "http://old" }));
     useApiClientStore.getState().updateRequest({ url: "http://{{NOPE}}/api" });

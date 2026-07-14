@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getModules, type WorkspaceInfo } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { buildAllModuleContexts } from "./module-context";
+import { addRecent } from "../shared/recents";
 
 interface StructuredError {
   code: string;
@@ -34,6 +35,7 @@ async function finalizeOpen(path: string): Promise<void> {
   const info = await invoke<WorkspaceInfo>("workspace_open", { path });
   useShellStore.getState().setWorkspace(info);
   await notifyModules(info);
+  void addRecent({ name: info.name, path });
 }
 
 async function finalizeCreate(path: string): Promise<void> {
@@ -43,10 +45,11 @@ async function finalizeCreate(path: string): Promise<void> {
   });
   useShellStore.getState().setWorkspace(info);
   await notifyModules(info);
+  void addRecent({ name: info.name, path });
 }
 
-export async function openWorkspace(): Promise<void> {
-  const selected = await open({ directory: true, multiple: false });
+export async function openWorkspace(directPath?: string): Promise<void> {
+  const selected = directPath ?? (await open({ directory: true, multiple: false }));
   if (!selected) return;
 
   try {
@@ -96,6 +99,18 @@ export async function createWorkspace(): Promise<void> {
       const msg = isStructuredError(err) ? err.message : String(err);
       useShellStore.getState().addToast(msg, "error");
     }
+  }
+}
+
+export function closeWorkspace(): void {
+  const store = useShellStore.getState();
+  if (!store.workspace) return;
+
+  store.setWorkspace(null);
+  store.setModuleContexts(new Map());
+  const tabIds = store.tabs.map((t) => t.id);
+  for (const id of tabIds) {
+    store.closeTab(id);
   }
 }
 

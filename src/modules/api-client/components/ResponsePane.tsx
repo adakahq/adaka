@@ -48,9 +48,16 @@ export function ResponsePane() {
 
   if (!response) {
     return (
-      <div className="flex flex-1 items-center justify-center text-adaka-faint">
-        <p className="text-xs select-none">
-          Send a request to see the response
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+        <p className="text-xs text-adaka-muted select-none">
+          Response will appear here
+        </p>
+        <p className="text-[11px] text-adaka-faint select-none">
+          Press{" "}
+          <kbd className="rounded border border-adaka-border px-1 py-0.5 text-[10px] text-adaka-muted">
+            Ctrl+↵
+          </kbd>{" "}
+          or click Send to make a request
         </p>
       </div>
     );
@@ -111,20 +118,36 @@ export function ResponsePane() {
   );
 }
 
+function errorHint(code: string): string | null {
+  switch (code) {
+    case "UNRESOLVED_VAR":
+      return "Pick an environment that defines this variable, or add it to your .adaka/environments/ file.";
+    case "SECRET_UNAVAILABLE":
+      return "Keychain integration is not yet available — replace the secret reference with a plain [vars] entry for now.";
+    case "ENV_NOT_FOUND":
+      return "The selected environment doesn't exist — create it in .adaka/environments/ or switch to a different one.";
+    case "PARSE":
+      return "The request file has a TOML syntax error — check for unmatched quotes or brackets.";
+    case "TIMEOUT":
+      return "The server didn't respond in time — try increasing the timeout in the request settings tab, and double-check the address.";
+    case "CONNECT":
+      return "Could not reach the server — check the URL and make sure the server is running.";
+    default:
+      return null;
+  }
+}
+
 function ErrorPanel({ error }: { error: { code: string; message: string } }) {
-  const isUnresolved = error.code === "UNRESOLVED_VAR";
+  const hint = errorHint(error.code);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4">
-      <div className="rounded border border-red-800/50 bg-red-950/30 px-4 py-3 text-center">
-        <p className="text-xs font-bold text-red-400">{error.code}</p>
-        <p className="mt-1 text-xs text-adaka-text">{error.message}</p>
-        {isUnresolved && (
-          <p className="mt-2 text-xs text-adaka-muted">
-            Check your environment variables — switch or edit the active
-            environment to define this variable.
-          </p>
+      <div className="max-w-sm rounded border border-red-800/50 bg-red-950/30 px-4 py-3 text-center">
+        <p className="text-xs text-adaka-text">{error.message}</p>
+        {hint && (
+          <p className="mt-2 text-xs text-adaka-muted">{hint}</p>
         )}
+        <p className="mt-2 text-[10px] text-adaka-faint">({error.code})</p>
       </div>
     </div>
   );

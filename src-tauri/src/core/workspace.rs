@@ -161,6 +161,19 @@ pub fn create(root: &Path, name: Option<&str>) -> Result<WorkspaceInfo, Workspac
         ),
     )?;
 
+    // Seed a welcome request so new users have something to send immediately.
+    let req_dir = adaka_dir.join("requests");
+    fs::create_dir_all(&req_dir)?;
+    atomic_write(
+        &req_dir.join("welcome.req.toml"),
+        concat!(
+            "version = 1\n",
+            "name = \"My first request\"\n",
+            "method = \"GET\"\n",
+            "url = \"{{BASE_URL}}/\"\n",
+        ),
+    )?;
+
     Ok(WorkspaceInfo {
         id,
         name: resolved_name,
@@ -200,6 +213,43 @@ pub fn write_file(root: &Path, relative: &str, content: &str) -> Result<(), Work
 pub fn delete_file(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
     let resolved = resolve_scoped_path(root, relative)?;
     fs::remove_file(resolved)?;
+    Ok(())
+}
+
+/// Reveal a path inside `.adaka/` in the OS file manager.
+/// Opens the containing folder. Path traversal checked.
+pub fn reveal_path(root: &Path, relative: &str) -> Result<(), WorkspaceError> {
+    let resolved = resolve_scoped_path(root, relative)?;
+    let dir = if resolved.is_dir() {
+        resolved
+    } else {
+        resolved
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| resolved.clone())
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&dir)
+            .spawn()
+            .map_err(WorkspaceError::Io)?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dir)
+            .spawn()
+            .map_err(WorkspaceError::Io)?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dir)
+            .spawn()
+            .map_err(WorkspaceError::Io)?;
+    }
     Ok(())
 }
 
@@ -400,6 +450,11 @@ pub fn workspace_write_file(
 #[tauri::command]
 pub fn workspace_delete_file(path: String, relative: String) -> Result<(), WorkspaceError> {
     delete_file(Path::new(&path), &relative)
+}
+
+#[tauri::command]
+pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), WorkspaceError> {
+    reveal_path(Path::new(&path), &relative)
 }
 
 // ---------------------------------------------------------------------------
@@ -670,6 +725,71 @@ mod tests {
         assert!(
             matches!(err, WorkspaceError::PathTraversal(_)),
             "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    fn reveal_path_rejects_traversal() {
+        let root = tmp_root();
+        create(root.path(), Some("Reveal Traversal")).unwrap();
+
+        let err = reveal_path(root.path(), "../etc/passwd").unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::PathTraversal(_)),
+            "expected PathTraversal, got: {err}"
+        );
+    }
+
+    #[test]
+    fn welcome_request_seeded_on_create() {
+        let root = tmp_root();
+        create(root.path(), Some("Welcome")).unwrap();
+
+        let content = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+        assert!(content.contains("My first request"));
+        assert!(content.contains("{{BASE_URL}}"));
+    }
+
+    #[test]
+    fn seeds_are_idempotent_across_opens() {
+        let root = tmp_root();
+        create(root.path(), Some("Idempotent")).unwrap();
+
+        let env_after_create = read_file(root.path(), "environments/local.toml").unwrap();
+        let req_after_create = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+
+        for _ in 0..3 {
+            let _info = open(root.path()).unwrap();
+        }
+
+        let env_after_opens = read_file(root.path(), "environments/local.toml").unwrap();
+        let req_after_opens = read_file(root.path(), "requests/welcome.req.toml").unwrap();
+        assert_eq!(
+            env_after_create, env_after_opens,
+            "env file must not be rewritten on open"
+        );
+        assert_eq!(
+            req_after_create, req_after_opens,
+            "request file must not be rewritten on open"
+        );
+    }
+
+    #[test]
+    fn env_seed_is_idempotent_across_opens() {
+        let root = tmp_root();
+        create(root.path(), Some("Idempotent")).unwrap();
+
+        let after_create = read_file(root.path(), "environments/local.toml").unwrap();
+
+        // "Open" the workspace 3 times — open() never rewrites env files
+        for _ in 0..3 {
+            let _info = open(root.path()).unwrap();
+        }
+
+        let after_opens = read_file(root.path(), "environments/local.toml").unwrap();
+        assert_eq!(
+            after_create, after_opens,
+            "env file must not be rewritten on open"
         );
     }
 

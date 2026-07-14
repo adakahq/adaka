@@ -1,5 +1,6 @@
 import { getModules, ModuleContextProvider } from "../shared/module-sdk";
 import { useShellStore } from "./store";
+import { WorkspaceHome } from "./WorkspaceHome";
 
 export function MainPane() {
   const activeTabId = useShellStore((s) => s.activeTabId);
@@ -8,11 +9,7 @@ export function MainPane() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   if (!activeTab) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-adaka-faint">
-        <p className="select-none text-sm">No tabs open</p>
-      </div>
-    );
+    return <WorkspaceHome />;
   }
 
   const mod = getModules().find((m) => m.id === activeTab.moduleId);
