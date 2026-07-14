@@ -28,6 +28,18 @@ pub struct HistoryEntry {
     pub request_snapshot: String,
 }
 
+/// Lightweight summary for list views — no response body, headers, or snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryListEntry {
+    pub id: i64,
+    pub method: String,
+    pub url_resolved: String,
+    pub status: u16,
+    pub duration_ms: u64,
+    pub response_size: usize,
+    pub started_at: String,
+}
+
 // ---------------------------------------------------------------------------
 // Database operations
 // ---------------------------------------------------------------------------
@@ -134,6 +146,44 @@ impl HistoryDb {
             )
             .map_err(|e| ApiClientError::Network(format!("history prune failed: {}", e)))?;
         Ok(())
+    }
+
+    pub fn list_summary(
+        &self,
+        workspace_id: &str,
+        request_path: &str,
+    ) -> Result<Vec<HistoryListEntry>, ApiClientError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, method, url_resolved, status, duration_ms, response_size, started_at
+                 FROM request_history
+                 WHERE workspace_id = ?1 AND request_path = ?2
+                 ORDER BY id DESC",
+            )
+            .map_err(|e| ApiClientError::Network(format!("history list failed: {}", e)))?;
+
+        let rows = stmt
+            .query_map(params![workspace_id, request_path], |row| {
+                Ok(HistoryListEntry {
+                    id: row.get(0)?,
+                    method: row.get(1)?,
+                    url_resolved: row.get(2)?,
+                    status: row.get::<_, u32>(3)? as u16,
+                    duration_ms: row.get::<_, i64>(4)? as u64,
+                    response_size: row.get::<_, i64>(5)? as usize,
+                    started_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| ApiClientError::Network(format!("history query failed: {}", e)))?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(
+                row.map_err(|e| ApiClientError::Network(format!("history row failed: {}", e)))?,
+            );
+        }
+        Ok(entries)
     }
 
     pub fn list(
@@ -347,6 +397,27 @@ mod tests {
 
         assert_eq!(db.list("ws1", "requests/get.req.toml").unwrap().len(), 1);
         assert_eq!(db.list("ws2", "requests/get.req.toml").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn list_summary_excludes_bodies() {
+        let db = HistoryDb::open_in_memory().unwrap();
+        let resp = sample_response(200);
+        db.insert(
+            "ws1",
+            "requests/get.req.toml",
+            &resp,
+            "2026-07-04T00:00:00Z",
+            "{\"method\":\"GET\",\"url\":\"http://example.com\"}",
+        )
+        .unwrap();
+
+        let summaries = db.list_summary("ws1", "requests/get.req.toml").unwrap();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].status, 200);
+        assert_eq!(summaries[0].method, "GET");
+        assert_eq!(summaries[0].duration_ms, 100);
+        assert_eq!(summaries[0].response_size, 11);
     }
 
     #[test]

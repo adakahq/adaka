@@ -1,14 +1,50 @@
-import { useEffect, useState, useCallback } from "react";
-import { openWorkspace, createWorkspace } from "./workspace-actions";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { openWorkspace, createWorkspace, quickCreateWorkspace, getDefaultWorkspaceDir } from "./workspace-actions";
 import { getRecents, removeRecent, type RecentWorkspace } from "../shared/recents";
 import { formatKey } from "../shared/shortcuts";
+import { useShellStore } from "./store";
+
+const UNSAFE_CHARS = /[/\\:*?"<>|]/;
+
+export function validateName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return "Name cannot be empty";
+  if (UNSAFE_CHARS.test(trimmed)) return "Name contains characters not allowed in folder names";
+  if (trimmed.startsWith(".")) return "Name cannot start with a dot";
+  if (trimmed.endsWith(".") || trimmed.endsWith(" ")) return "Name cannot end with a dot or space";
+  if (trimmed.length > 100) return "Name is too long (max 100 characters)";
+  return null;
+}
 
 export function WelcomeScreen() {
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
+  const shellShowQuickCreate = useShellStore((s) => s.showQuickCreate);
+  const setShellShowQuickCreate = useShellStore((s) => s.setShowQuickCreate);
+  const [showCreate, setShowCreate] = useState(false);
+  const [wsName, setWsName] = useState("");
+  const [defaultDir, setDefaultDir] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void getRecents().then(setRecents);
   }, []);
+
+  useEffect(() => {
+    if (shellShowQuickCreate) {
+      setShowCreate(true);
+      setShellShowQuickCreate(false);
+    }
+  }, [shellShowQuickCreate, setShellShowQuickCreate]);
+
+  useEffect(() => {
+    if (showCreate) {
+      void getDefaultWorkspaceDir()
+        .then(setDefaultDir)
+        .catch(() => setDefaultDir(null));
+      requestAnimationFrame(() => nameInputRef.current?.focus());
+    }
+  }, [showCreate]);
 
   const handleRemove = useCallback(
     async (e: React.MouseEvent, path: string) => {
@@ -25,6 +61,16 @@ export function WelcomeScreen() {
     },
     [],
   );
+
+  const nameError = wsName.trim() ? validateName(wsName) : null;
+
+  const handleCreate = useCallback(async () => {
+    const err = validateName(wsName);
+    if (err) return;
+    setCreating(true);
+    await quickCreateWorkspace(wsName.trim());
+    setCreating(false);
+  }, [wsName]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 px-4 text-adaka-muted">
@@ -86,28 +132,89 @@ export function WelcomeScreen() {
       )}
 
       {/* Actions */}
-      <div className="flex flex-col items-center gap-3">
-        <div className="flex gap-3">
-          <button
-            className="rounded bg-adaka-gold px-4 py-2 text-sm font-medium text-adaka-on-gold hover:brightness-110"
-            onClick={() => void openWorkspace()}
-          >
-            Open workspace
-          </button>
-          <button
-            className="rounded border border-adaka-border-strong px-4 py-2 text-sm font-medium text-adaka-text hover:border-adaka-muted"
-            onClick={() => void createWorkspace()}
-          >
-            Create workspace
-          </button>
-        </div>
-        <p className="text-center text-[11px] leading-relaxed text-adaka-faint">
-          Creates a{" "}
-          <code className="rounded bg-adaka-border px-1 py-0.5 text-[10px]">
-            .adaka
-          </code>{" "}
-          folder inside — plain files you can commit
-        </p>
+      <div className="flex w-full max-w-sm flex-col items-center gap-3">
+        {!showCreate ? (
+          <>
+            <div className="flex gap-3">
+              <button
+                className="rounded bg-adaka-gold px-4 py-2 text-sm font-medium text-adaka-on-gold hover:brightness-110"
+                onClick={() => void openWorkspace()}
+              >
+                Open workspace
+              </button>
+              <button
+                className="rounded border border-adaka-border-strong px-4 py-2 text-sm font-medium text-adaka-text hover:border-adaka-muted"
+                onClick={() => setShowCreate(true)}
+              >
+                Create workspace
+              </button>
+            </div>
+            <p className="text-center text-[11px] leading-relaxed text-adaka-faint">
+              A workspace is a folder where your requests are saved — as plain files you own
+            </p>
+          </>
+        ) : (
+          <div className="w-full rounded-lg border border-adaka-border bg-adaka-chrome p-4">
+            <h3 className="mb-3 text-xs font-medium text-adaka-text">Name your workspace</h3>
+            <input
+              ref={nameInputRef}
+              type="text"
+              className="w-full rounded border border-adaka-border bg-adaka-bg px-3 py-2 text-sm text-adaka-text placeholder:text-adaka-faint focus:border-adaka-gold focus:outline-none"
+              placeholder="e.g. my-api, backend-v2"
+              value={wsName}
+              onChange={(e) => setWsName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !nameError && wsName.trim()) {
+                  e.preventDefault();
+                  void handleCreate();
+                }
+                if (e.key === "Escape") {
+                  setShowCreate(false);
+                  setWsName("");
+                }
+              }}
+              disabled={creating}
+            />
+            {nameError && (
+              <p className="mt-1 text-xs text-red-400">{nameError}</p>
+            )}
+            {defaultDir && wsName.trim() && !nameError && (
+              <p className="mt-1.5 truncate text-[10px] text-adaka-faint" title={`${defaultDir}/${wsName.trim()}`}>
+                {defaultDir}/{wsName.trim()}
+              </p>
+            )}
+            <div className="mt-3 flex items-center justify-between">
+              <button
+                className="text-xs text-adaka-faint hover:text-adaka-muted"
+                onClick={() => {
+                  setShowCreate(false);
+                  setWsName("");
+                  void createWorkspace();
+                }}
+              >
+                Choose a custom location…
+              </button>
+              <div className="flex gap-2">
+                <button
+                  className="rounded border border-adaka-border px-3 py-1.5 text-xs text-adaka-muted hover:text-adaka-text"
+                  onClick={() => {
+                    setShowCreate(false);
+                    setWsName("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rounded bg-adaka-gold px-3 py-1.5 text-xs font-medium text-adaka-on-gold hover:brightness-110 disabled:opacity-50"
+                  disabled={!wsName.trim() || !!nameError || creating}
+                  onClick={() => void handleCreate()}
+                >
+                  {creating ? "Creating…" : "Create"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer hints */}
@@ -124,7 +231,7 @@ export function WelcomeScreen() {
       </p>
 
       {/* Empty recents message */}
-      {recents.length === 0 && (
+      {recents.length === 0 && !showCreate && (
         <p className="text-xs text-adaka-faint">
           Workspaces you open will appear here
         </p>

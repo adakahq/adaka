@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
 import { useShellStore } from "./store";
-import { openWorkspace, createWorkspace, closeWorkspace } from "./workspace-actions";
+import { openWorkspace, closeWorkspace } from "./workspace-actions";
 
 interface ResolvedCommand {
   cmd: PaletteCommand;
@@ -64,7 +64,12 @@ function builtinCommands(): ResolvedCommand[] {
         id: "builtin:create-workspace",
         label: "Create workspace",
         keywords: ["new", "init"],
-        action: () => void createWorkspace(),
+        action: () => {
+          if (store.workspace) {
+            closeWorkspace();
+          }
+          store.setShowQuickCreate(true);
+        },
       },
       ctx: null,
       moduleId: null,

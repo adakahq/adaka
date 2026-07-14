@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RequestFile, SendResponse, StructuredError, TreeNode } from "./types";
+import type { RequestFile, SendResponse, StructuredError, TreeNode, HistoryListEntry, HistoryEntry } from "./types";
 
 interface ApiClientState {
   tree: TreeNode[];
@@ -11,8 +11,10 @@ interface ApiClientState {
   response: SendResponse | null;
   error: StructuredError | null;
   activeTab: "params" | "headers" | "auth" | "body";
-  responseTab: "body" | "headers" | "timing";
+  responseTab: "body" | "headers" | "timing" | "history";
   prettyBody: boolean;
+  historyEntries: HistoryListEntry[];
+  viewingHistory: HistoryEntry | null;
 
   setTree: (tree: TreeNode[]) => void;
   setActiveRequestPath: (path: string | null) => void;
@@ -24,6 +26,8 @@ interface ApiClientState {
   setActiveTab: (tab: ApiClientState["activeTab"]) => void;
   setResponseTab: (tab: ApiClientState["responseTab"]) => void;
   setPrettyBody: (pretty: boolean) => void;
+  setHistoryEntries: (entries: HistoryListEntry[]) => void;
+  setViewingHistory: (entry: HistoryEntry | null) => void;
   updateRequest: (partial: Partial<RequestFile>) => void;
   createDraft: () => void;
 }
@@ -40,10 +44,12 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
   activeTab: "params",
   responseTab: "body",
   prettyBody: true,
+  historyEntries: [],
+  viewingHistory: null,
 
   setTree: (tree) => set({ tree }),
   setActiveRequestPath: (path) => set({ activeRequestPath: path }),
-  setActiveRequest: (req) => set({ activeRequest: req, dirty: false }),
+  setActiveRequest: (req) => set({ activeRequest: req, dirty: false, viewingHistory: null, historyEntries: [] }),
   setDirty: (dirty) => set({ dirty }),
   setSending: (sending, requestId = null) =>
     set({ sending, activeRequestId: requestId }),
@@ -52,6 +58,8 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   setResponseTab: (tab) => set({ responseTab: tab }),
   setPrettyBody: (pretty) => set({ prettyBody: pretty }),
+  setHistoryEntries: (entries) => set({ historyEntries: entries }),
+  setViewingHistory: (entry) => set({ viewingHistory: entry }),
   updateRequest: (partial) => {
     const { activeRequest } = get();
     if (activeRequest) {
@@ -82,5 +90,7 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
       dirty: true,
       response: null,
       error: null,
+      historyEntries: [],
+      viewingHistory: null,
     }),
 }));
