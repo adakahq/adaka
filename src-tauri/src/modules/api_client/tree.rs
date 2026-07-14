@@ -170,7 +170,11 @@ mod tests {
     fn setup_workspace(tmp: &tempfile::TempDir) {
         workspace::create(tmp.path(), Some("Test")).unwrap();
         // Remove seeded welcome.req.toml so tree tests start clean
-        let welcome = tmp.path().join(".adaka").join("requests").join("welcome.req.toml");
+        let welcome = tmp
+            .path()
+            .join(".adaka")
+            .join("requests")
+            .join("welcome.req.toml");
         let _ = std::fs::remove_file(welcome);
     }
 

@@ -847,24 +847,24 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         crate::core::workspace::create(tmp.path(), Some("URLTest")).unwrap();
 
-        let req_content = "version = 1\nname = \"bad\"\nmethod = \"GET\"\nurl = \"example.com/api\"\n";
+        let req_content =
+            "version = 1\nname = \"bad\"\nmethod = \"GET\"\nurl = \"example.com/api\"\n";
         crate::core::workspace::write_file(tmp.path(), "requests/bad.req.toml", req_content)
             .unwrap();
 
         let ctx = EnvContext::empty();
-        let err = prepare_with_ctx(
-            tmp.path().to_str().unwrap(),
-            "requests/bad.req.toml",
-            ctx,
-        )
-        .unwrap_err();
+        let err = prepare_with_ctx(tmp.path().to_str().unwrap(), "requests/bad.req.toml", ctx)
+            .unwrap_err();
 
         assert!(
             matches!(err, ApiClientError::InvalidUrl(_)),
             "expected InvalidUrl, got: {err}"
         );
         let msg = err.to_string();
-        assert!(msg.contains("http://"), "error should suggest adding http://: {msg}");
+        assert!(
+            msg.contains("http://"),
+            "error should suggest adding http://: {msg}"
+        );
     }
 
     #[test]

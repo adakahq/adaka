@@ -8,4 +8,5 @@ echo json_encode([
     'time'   => date('c'),
 ], JSON_PRETTY_PRINT);
 
-// php -S 127.0.0.1:8080 dev/router.php
+// cd C:\Users\VICTUS\Desktop\adaka
+// php -S 127.0.0.1:8080 dev/router.phpx

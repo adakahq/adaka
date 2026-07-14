@@ -764,8 +764,14 @@ mod tests {
 
         let env_after_opens = read_file(root.path(), "environments/local.toml").unwrap();
         let req_after_opens = read_file(root.path(), "requests/welcome.req.toml").unwrap();
-        assert_eq!(env_after_create, env_after_opens, "env file must not be rewritten on open");
-        assert_eq!(req_after_create, req_after_opens, "request file must not be rewritten on open");
+        assert_eq!(
+            env_after_create, env_after_opens,
+            "env file must not be rewritten on open"
+        );
+        assert_eq!(
+            req_after_create, req_after_opens,
+            "request file must not be rewritten on open"
+        );
     }
 
     #[test]
@@ -781,7 +787,10 @@ mod tests {
         }
 
         let after_opens = read_file(root.path(), "environments/local.toml").unwrap();
-        assert_eq!(after_create, after_opens, "env file must not be rewritten on open");
+        assert_eq!(
+            after_create, after_opens,
+            "env file must not be rewritten on open"
+        );
     }
 
     #[test]
