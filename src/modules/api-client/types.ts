@@ -121,6 +121,7 @@ export interface ImportReport {
   skipped: SkippedItem[];
   generated_env: string | null;
   files_written: string[];
+  undefined_vars: string[];
 }
 
 export interface SkippedItem {

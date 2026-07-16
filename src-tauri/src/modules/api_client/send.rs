@@ -1089,17 +1089,16 @@ content = '{"token":"{{SECRET}}"}'
         crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
 
         let env_content = "version = 1\n\n[vars]\nAPI_KEY = \"abc123\"\n";
-        crate::core::workspace::write_file(
-            tmp.path(),
-            "environments/staging.toml",
-            env_content,
-        )
-        .unwrap();
+        crate::core::workspace::write_file(tmp.path(), "environments/staging.toml", env_content)
+            .unwrap();
 
         let err = enrich_unresolved_var(tmp.path(), "API_KEY", None);
         let msg = err.to_string();
         assert!(msg.contains("staging"), "should name the env: {msg}");
-        assert!(msg.contains("switch environments"), "should suggest switching: {msg}");
+        assert!(
+            msg.contains("switch environments"),
+            "should suggest switching: {msg}"
+        );
     }
 
     #[test]
@@ -1108,16 +1107,15 @@ content = '{"token":"{{SECRET}}"}'
         crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
 
         let env_content = "version = 1\n\n[vars]\nAPI_KEY = \"abc123\"\n";
-        crate::core::workspace::write_file(
-            tmp.path(),
-            "environments/staging.toml",
-            env_content,
-        )
-        .unwrap();
+        crate::core::workspace::write_file(tmp.path(), "environments/staging.toml", env_content)
+            .unwrap();
 
         let err = enrich_unresolved_var(tmp.path(), "API_KEY", Some("staging"));
         let msg = err.to_string();
-        assert!(!msg.contains("staging"), "should not suggest the active env: {msg}");
+        assert!(
+            !msg.contains("staging"),
+            "should not suggest the active env: {msg}"
+        );
     }
 
     #[test]
@@ -1127,7 +1125,13 @@ content = '{"token":"{{SECRET}}"}'
 
         let err = enrich_unresolved_var(tmp.path(), "TOTALLY_MISSING", None);
         let msg = err.to_string();
-        assert!(msg.contains("TOTALLY_MISSING"), "should contain var name: {msg}");
-        assert!(!msg.contains("switch environments"), "no switch hint when undefined: {msg}");
+        assert!(
+            msg.contains("TOTALLY_MISSING"),
+            "should contain var name: {msg}"
+        );
+        assert!(
+            !msg.contains("switch environments"),
+            "no switch hint when undefined: {msg}"
+        );
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,7 @@ pub struct ImportReport {
     pub skipped: Vec<SkippedItem>,
     pub generated_env: Option<String>,
     pub files_written: Vec<String>,
+    pub undefined_vars: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,16 +198,24 @@ pub fn import_postman(
         skipped: Vec::new(),
         generated_env: None,
         files_written: Vec::new(),
+        undefined_vars: Vec::new(),
     };
 
-    // Process items recursively
+    // Process items recursively, collecting all referenced template vars
+    let mut all_vars = BTreeSet::new();
     let base_folder = if target_folder.is_empty() {
         "requests".to_string()
     } else {
         format!("requests/{target_folder}")
     };
 
-    process_items(root, &collection.item, &base_folder, &mut report)?;
+    process_items(
+        root,
+        &collection.item,
+        &base_folder,
+        &mut report,
+        &mut all_vars,
+    )?;
 
     // Generate environment from collection variables
     if !collection.variable.is_empty() {
@@ -224,8 +233,8 @@ pub fn import_postman(
     if let Some(ref auth) = collection.auth {
         let mapped = map_auth(auth);
         if mapped.auth_type != "inherit" && mapped.auth_type != "none" {
+            collect_auth_vars(&mapped, &mut all_vars);
             let coll_path = format!("{base_folder}/collection.toml");
-            // Read existing or create new
             let existing = workspace::read_file(root, &coll_path).ok();
             let mut coll_config = match &existing {
                 Some(raw) => super::format::parse_collection(raw, &coll_path)
@@ -239,6 +248,10 @@ pub fn import_postman(
         }
     }
 
+    // Compute undefined vars: referenced in requests but not in the generated env
+    let defined: BTreeSet<String> = collection.variable.iter().map(|v| v.key.clone()).collect();
+    report.undefined_vars = all_vars.difference(&defined).cloned().collect();
+
     Ok(report)
 }
 
@@ -247,6 +260,7 @@ fn process_items(
     items: &[PostmanItem],
     folder: &str,
     report: &mut ImportReport,
+    all_vars: &mut BTreeSet<String>,
 ) -> Result<(), String> {
     let mut order: Vec<String> = Vec::new();
 
@@ -258,7 +272,7 @@ fn process_items(
 
             // Create collection.toml for subfolder
             let coll_path = format!("{subfolder}/collection.toml");
-            process_items(root, children, &subfolder, report)?;
+            process_items(root, children, &subfolder, report, all_vars)?;
 
             // Read back or create the collection.toml to set order
             let existing = workspace::read_file(root, &coll_path).ok();
@@ -279,6 +293,7 @@ fn process_items(
             let mut skips: Vec<SkippedItem> = Vec::new();
 
             let req_file = convert_request(&item.name, request, &mut skips);
+            collect_request_vars(&req_file, all_vars);
 
             // Check for scripts
             if let Some(ref events) = item.event {
@@ -1000,6 +1015,71 @@ fn generate_env_toml(vars: &[PostmanVariable]) -> String {
     }
     lines.push(String::new());
     lines.join("\n")
+}
+
+fn extract_template_vars(text: &str, out: &mut BTreeSet<String>) {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i + 1 < len {
+        if bytes[i] == b'{' && bytes[i + 1] == b'{' {
+            if let Some(close) = text[i + 2..].find("}}") {
+                let var_name = text[i + 2..i + 2 + close].trim();
+                if !var_name.is_empty() {
+                    out.insert(var_name.to_string());
+                }
+                i = i + 2 + close + 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+}
+
+fn collect_request_vars(req: &RequestFile, out: &mut BTreeSet<String>) {
+    extract_template_vars(&req.url, out);
+    for (k, v) in &req.headers {
+        extract_template_vars(k, out);
+        extract_template_vars(v, out);
+    }
+    for (k, v) in &req.headers_disabled {
+        extract_template_vars(k, out);
+        extract_template_vars(v, out);
+    }
+    for (k, v) in &req.query {
+        extract_template_vars(k, out);
+        extract_template_vars(v, out);
+    }
+    for (k, v) in &req.query_disabled {
+        extract_template_vars(k, out);
+        extract_template_vars(v, out);
+    }
+    collect_auth_vars(&req.auth, out);
+    if let Some(ref content) = req.body.content {
+        extract_template_vars(content, out);
+    }
+    for field in &req.body.fields {
+        extract_template_vars(&field.name, out);
+        extract_template_vars(&field.value, out);
+    }
+}
+
+fn collect_auth_vars(auth: &AuthConfig, out: &mut BTreeSet<String>) {
+    if let Some(ref v) = auth.token {
+        extract_template_vars(v, out);
+    }
+    if let Some(ref v) = auth.username {
+        extract_template_vars(v, out);
+    }
+    if let Some(ref v) = auth.password {
+        extract_template_vars(v, out);
+    }
+    if let Some(ref v) = auth.key {
+        extract_template_vars(v, out);
+    }
+    if let Some(ref v) = auth.value {
+        extract_template_vars(v, out);
+    }
 }
 
 fn unique_env_name(root: &Path, base: &str) -> String {
@@ -1876,5 +1956,75 @@ mod tests {
         )
         .unwrap();
         assert_eq!(unique_env_name(tmp.path(), "imported"), "imported-3");
+    }
+
+    // -- extract_template_vars / undefined_vars tests ---------------------------
+
+    #[test]
+    fn extract_vars_from_text() {
+        let mut vars = BTreeSet::new();
+        extract_template_vars("{{HOST}}:{{PORT}}/{{PATH}}", &mut vars);
+        assert_eq!(
+            vars.into_iter().collect::<Vec<_>>(),
+            vec!["HOST", "PATH", "PORT"]
+        );
+    }
+
+    #[test]
+    fn extract_vars_ignores_empty_braces() {
+        let mut vars = BTreeSet::new();
+        extract_template_vars("prefix/{{}}suffix", &mut vars);
+        assert!(vars.is_empty());
+    }
+
+    #[test]
+    fn import_reports_undefined_vars() {
+        let root = tmp_workspace();
+        let json = serde_json::json!({
+            "info": { "name": "Undef Vars", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+            "item": [
+                {
+                    "name": "Auth Request",
+                    "request": {
+                        "method": "GET",
+                        "url": { "raw": "{{BASE_URL}}/api" },
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [{ "key": "token", "value": "{{API_TOKEN}}" }]
+                        },
+                        "header": [
+                            { "key": "X-Shop", "value": "{{SHOP_PASSWORD}}" }
+                        ]
+                    }
+                }
+            ],
+            "variable": [
+                { "key": "BASE_URL", "value": "http://localhost:3000" }
+            ]
+        })
+        .to_string();
+
+        let report = import_postman(root.path(), &json, "").unwrap();
+        assert_eq!(report.imported_count, 1);
+        assert_eq!(report.generated_env, Some("imported".to_string()));
+        assert_eq!(report.undefined_vars, vec!["API_TOKEN", "SHOP_PASSWORD"]);
+    }
+
+    #[test]
+    fn import_no_undefined_vars_when_all_defined() {
+        let root = tmp_workspace();
+        let json = serde_json::json!({
+            "info": { "name": "All Defined", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+            "item": [
+                { "name": "Test", "request": { "method": "GET", "url": { "raw": "{{BASE_URL}}/test" } } }
+            ],
+            "variable": [
+                { "key": "BASE_URL", "value": "http://localhost:3000" }
+            ]
+        })
+        .to_string();
+
+        let report = import_postman(root.path(), &json, "").unwrap();
+        assert!(report.undefined_vars.is_empty());
     }
 }

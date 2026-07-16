@@ -308,6 +308,10 @@ export function ApiClientRoute() {
             <ImportReportPanel
               report={importReport}
               onDismiss={() => setImportReport(null)}
+              onOpenEnvEditor={(envName) => {
+                setImportReport(null);
+                guardEnvEditor(() => setEditingEnv(envName));
+              }}
             />
           ) : editingEnv ? (
             <EnvEditor

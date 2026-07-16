@@ -4,12 +4,15 @@ import type { ImportReport } from "../types";
 export function ImportReportPanel({
   report,
   onDismiss,
+  onOpenEnvEditor,
 }: {
   report: ImportReport;
   onDismiss: () => void;
+  onOpenEnvEditor?: (envName: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasIssues = report.skipped.length > 0;
+  const hasUndefinedVars = report.undefined_vars.length > 0;
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-8">
@@ -38,6 +41,33 @@ export function ImportReportPanel({
                 environments/{report.generated_env}.toml
               </span>
             </p>
+          </div>
+        )}
+
+        {/* Undefined variables */}
+        {hasUndefinedVars && (
+          <div className="mb-3 rounded border border-amber-800/40 bg-amber-950/20 px-3 py-2">
+            <p className="text-xs font-medium text-amber-300">
+              You may need to define:{" "}
+              <span className="font-mono text-adaka-text">
+                {report.undefined_vars.join(", ")}
+              </span>
+            </p>
+            <p className="mt-1 text-[11px] text-adaka-muted">
+              Postman keeps credentials in environments, which collection exports
+              don't include — add these in the Variables editor.
+            </p>
+            {onOpenEnvEditor && report.generated_env != null && (
+              <button
+                className="mt-2 rounded border border-adaka-border bg-adaka-bg px-2.5 py-1 text-xs text-adaka-muted hover:text-adaka-text"
+                onClick={() => {
+                  const env = report.generated_env;
+                  if (env) onOpenEnvEditor(env);
+                }}
+              >
+                Open Variables editor
+              </button>
+            )}
           </div>
         )}
 
