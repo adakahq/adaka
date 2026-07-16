@@ -28,12 +28,17 @@ export function ImportReportPanel({
 
         {/* Generated environment */}
         {report.generated_env && (
-          <p className="mb-3 text-xs text-adaka-muted">
-            Collection variables saved to{" "}
-            <span className="font-mono text-adaka-text">
-              environments/{report.generated_env}.toml
-            </span>
-          </p>
+          <div className="mb-3 rounded border border-adaka-gold/30 bg-adaka-gold/5 px-3 py-2">
+            <p className="text-xs text-adaka-text">
+              Switched to <span className="font-medium text-adaka-gold">{report.generated_env}</span> — its variables are now live
+            </p>
+            <p className="mt-1 text-[11px] text-adaka-muted">
+              Saved to{" "}
+              <span className="font-mono">
+                environments/{report.generated_env}.toml
+              </span>
+            </p>
+          </div>
         )}
 
         {/* Skipped items */}

@@ -210,11 +210,11 @@ pub fn import_postman(
 
     // Generate environment from collection variables
     if !collection.variable.is_empty() {
-        let env_name = "imported";
+        let env_name = unique_env_name(root, "imported");
         let env_content = generate_env_toml(&collection.variable);
         workspace::write_file(root, &format!("environments/{env_name}.toml"), &env_content)
             .map_err(|e| format!("Failed to write environment: {e}"))?;
-        report.generated_env = Some(env_name.to_string());
+        report.generated_env = Some(env_name.clone());
         report
             .files_written
             .push(format!("environments/{env_name}.toml"));
@@ -1000,6 +1000,20 @@ fn generate_env_toml(vars: &[PostmanVariable]) -> String {
     }
     lines.push(String::new());
     lines.join("\n")
+}
+
+fn unique_env_name(root: &Path, base: &str) -> String {
+    let env_dir = root.join(".adaka").join("environments");
+    if !env_dir.join(format!("{base}.toml")).exists() {
+        return base.to_string();
+    }
+    for i in 2..100 {
+        let candidate = format!("{base}-{i}");
+        if !env_dir.join(format!("{candidate}.toml")).exists() {
+            return candidate;
+        }
+    }
+    format!("{base}-{}", rand::random::<u16>())
 }
 
 fn default_collection() -> CollectionConfig {
@@ -1834,5 +1848,33 @@ mod tests {
     fn tokenize_line_continuation() {
         let tokens = tokenize_shell("hello \\\nworld").unwrap();
         assert_eq!(tokens, vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn unique_env_name_no_collision() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+        assert_eq!(unique_env_name(tmp.path(), "imported"), "imported");
+    }
+
+    #[test]
+    fn unique_env_name_collision_suffixes() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+        crate::core::workspace::write_file(
+            tmp.path(),
+            "environments/imported.toml",
+            "version = 1\n[vars]\n",
+        )
+        .unwrap();
+        assert_eq!(unique_env_name(tmp.path(), "imported"), "imported-2");
+
+        crate::core::workspace::write_file(
+            tmp.path(),
+            "environments/imported-2.toml",
+            "version = 1\n[vars]\n",
+        )
+        .unwrap();
+        assert_eq!(unique_env_name(tmp.path(), "imported"), "imported-3");
     }
 }

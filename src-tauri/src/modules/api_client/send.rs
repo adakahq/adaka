@@ -233,6 +233,126 @@ fn find_closing_braces(template: &str, start: usize) -> Option<usize> {
 }
 
 // ---------------------------------------------------------------------------
+// Variable resolution for a whole request — extracted so prepare() can catch
+// UnresolvedVar once and enrich the error message.
+// ---------------------------------------------------------------------------
+
+struct ResolvedVars {
+    url: ResolveResult,
+    headers_resolved: Vec<(String, String)>,
+    headers_redacted: Vec<(String, String)>,
+    query_resolved: Vec<(String, String)>,
+    query_redacted: Vec<(String, String)>,
+    body_resolved: Option<String>,
+    body_redacted: Option<String>,
+    fields: Vec<(String, String)>,
+    auth_token: Option<String>,
+    auth_password: Option<String>,
+    auth_value: Option<String>,
+}
+
+fn resolve_request_vars(
+    req: &super::format::RequestFile,
+    env_ctx: &EnvContext,
+) -> Result<ResolvedVars, ApiClientError> {
+    let url = resolve_traced(&req.url, env_ctx)?;
+
+    let mut headers_resolved = Vec::new();
+    let mut headers_redacted = Vec::new();
+    for (k, v) in &req.headers {
+        let rk = resolve_traced(k, env_ctx)?;
+        let rv = resolve_traced(v, env_ctx)?;
+        headers_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        headers_redacted.push((rk.redacted, rv.redacted));
+    }
+
+    let mut query_resolved = Vec::new();
+    let mut query_redacted = Vec::new();
+    for (k, v) in &req.query {
+        let rk = resolve_traced(k, env_ctx)?;
+        let rv = resolve_traced(v, env_ctx)?;
+        query_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
+        query_redacted.push((rk.redacted, rv.redacted));
+    }
+
+    let (body_resolved, body_redacted) = match req.body.body_type.as_str() {
+        "none" => (None, None),
+        "form" => (None, None),
+        _ => {
+            if let Some(content) = &req.body.content {
+                let r = resolve_traced(content, env_ctx)?;
+                (Some(r.resolved), Some(r.redacted))
+            } else {
+                (None, None)
+            }
+        }
+    };
+
+    let mut fields = Vec::new();
+    if req.body.body_type == "form" {
+        for field in &req.body.fields {
+            if field.enabled {
+                let fv = resolve_all_vars(&field.value, env_ctx)?;
+                fields.push((field.name.clone(), fv));
+            }
+        }
+    }
+
+    let auth_token = if let Some(t) = &req.auth.token {
+        Some(resolve_all_vars(t, env_ctx)?)
+    } else {
+        None
+    };
+    let auth_password = if let Some(p) = &req.auth.password {
+        Some(resolve_all_vars(p, env_ctx)?)
+    } else {
+        None
+    };
+    let auth_value = if let Some(v) = &req.auth.value {
+        Some(resolve_all_vars(v, env_ctx)?)
+    } else {
+        None
+    };
+
+    Ok(ResolvedVars {
+        url,
+        headers_resolved,
+        headers_redacted,
+        query_resolved,
+        query_redacted,
+        body_resolved,
+        body_redacted,
+        fields,
+        auth_token,
+        auth_password,
+        auth_value,
+    })
+}
+
+/// Scan all environments in the workspace to find which one defines the missing variable.
+fn enrich_unresolved_var(
+    root: &std::path::Path,
+    var_name: &str,
+    active_env: Option<&str>,
+) -> ApiClientError {
+    if let Ok(env_names) = env::list_environments(root) {
+        for name in &env_names {
+            if active_env == Some(name.as_str()) {
+                continue;
+            }
+            if let Ok(environment) = env::load_environment(root, name) {
+                if environment.vars.contains_key(var_name) {
+                    return ApiClientError::UnresolvedVar(format!(
+                        "{var_name} — the '{name}' environment defines it, switch environments in the Variables dropdown"
+                    ));
+                }
+            }
+        }
+    }
+    ApiClientError::UnresolvedVar(var_name.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Cancellation registry
 // ---------------------------------------------------------------------------
 
@@ -279,7 +399,28 @@ pub async fn prepare(
     };
 
     // 4. Resolve variables — UNRESOLVED_VAR error before network
-    let url_result = resolve_traced(&req.url, &env_ctx)?;
+    //    If resolution fails, enrich the error with a hint about which env defines
+    //    the missing variable (if any).
+    let resolve_result = resolve_request_vars(&req, &env_ctx);
+    let resolved = match resolve_result {
+        Ok(r) => r,
+        Err(ApiClientError::UnresolvedVar(ref var_name)) => {
+            return Err(enrich_unresolved_var(root, var_name, env_name));
+        }
+        Err(e) => return Err(e),
+    };
+
+    let url_result = resolved.url;
+    let headers_resolved = resolved.headers_resolved;
+    let headers_redacted = resolved.headers_redacted;
+    let query_resolved = resolved.query_resolved;
+    let query_redacted = resolved.query_redacted;
+    let body_resolved = resolved.body_resolved;
+    let body_redacted = resolved.body_redacted;
+    let fields = resolved.fields;
+    let auth_token = resolved.auth_token;
+    let auth_password = resolved.auth_password;
+    let auth_value = resolved.auth_value;
 
     // 5. Validate URL structure before any network I/O
     if let Err(e) = url::Url::parse(&url_result.resolved) {
@@ -293,65 +434,6 @@ pub async fn prepare(
         };
         return Err(ApiClientError::InvalidUrl(hint));
     }
-
-    let mut headers_resolved: Vec<(String, String)> = Vec::new();
-    let mut headers_redacted: Vec<(String, String)> = Vec::new();
-    for (k, v) in &req.headers {
-        let rk = resolve_traced(k, &env_ctx)?;
-        let rv = resolve_traced(v, &env_ctx)?;
-        headers_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
-        headers_redacted.push((rk.redacted, rv.redacted));
-    }
-
-    let mut query_resolved: Vec<(String, String)> = Vec::new();
-    let mut query_redacted: Vec<(String, String)> = Vec::new();
-    for (k, v) in &req.query {
-        let rk = resolve_traced(k, &env_ctx)?;
-        let rv = resolve_traced(v, &env_ctx)?;
-        query_resolved.push((rk.resolved.clone(), rv.resolved.clone()));
-        query_redacted.push((rk.redacted, rv.redacted));
-    }
-
-    let (body_resolved, body_redacted) = match req.body.body_type.as_str() {
-        "none" => (None, None),
-        "form" => (None, None), // form fields handled separately
-        _ => {
-            if let Some(content) = &req.body.content {
-                let r = resolve_traced(content, &env_ctx)?;
-                (Some(r.resolved), Some(r.redacted))
-            } else {
-                (None, None)
-            }
-        }
-    };
-
-    // Resolve form fields
-    let mut fields = Vec::new();
-    if req.body.body_type == "form" {
-        for field in &req.body.fields {
-            if field.enabled {
-                let fv = resolve_all_vars(&field.value, &env_ctx)?;
-                fields.push((field.name.clone(), fv));
-            }
-        }
-    }
-
-    // Resolve auth tokens/passwords
-    let auth_token = if let Some(t) = &req.auth.token {
-        Some(resolve_all_vars(t, &env_ctx)?)
-    } else {
-        None
-    };
-    let auth_password = if let Some(p) = &req.auth.password {
-        Some(resolve_all_vars(p, &env_ctx)?)
-    } else {
-        None
-    };
-    let auth_value = if let Some(v) = &req.auth.value {
-        Some(resolve_all_vars(v, &env_ctx)?)
-    } else {
-        None
-    };
 
     let request_id = Uuid::new_v4().to_string();
 
@@ -999,5 +1081,53 @@ content = '{"token":"{{SECRET}}"}'
         let snapshot = prepared.redacted_snapshot();
         assert!(!snapshot.contains("real-secret-val-42"));
         assert!(snapshot.contains("•••"));
+    }
+
+    #[test]
+    fn enrich_unresolved_var_names_defining_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+
+        let env_content = "version = 1\n\n[vars]\nAPI_KEY = \"abc123\"\n";
+        crate::core::workspace::write_file(
+            tmp.path(),
+            "environments/staging.toml",
+            env_content,
+        )
+        .unwrap();
+
+        let err = enrich_unresolved_var(tmp.path(), "API_KEY", None);
+        let msg = err.to_string();
+        assert!(msg.contains("staging"), "should name the env: {msg}");
+        assert!(msg.contains("switch environments"), "should suggest switching: {msg}");
+    }
+
+    #[test]
+    fn enrich_unresolved_var_skips_active_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+
+        let env_content = "version = 1\n\n[vars]\nAPI_KEY = \"abc123\"\n";
+        crate::core::workspace::write_file(
+            tmp.path(),
+            "environments/staging.toml",
+            env_content,
+        )
+        .unwrap();
+
+        let err = enrich_unresolved_var(tmp.path(), "API_KEY", Some("staging"));
+        let msg = err.to_string();
+        assert!(!msg.contains("staging"), "should not suggest the active env: {msg}");
+    }
+
+    #[test]
+    fn enrich_unresolved_var_bare_name_when_undefined_everywhere() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::core::workspace::create(tmp.path(), Some("Test")).unwrap();
+
+        let err = enrich_unresolved_var(tmp.path(), "TOTALLY_MISSING", None);
+        let msg = err.to_string();
+        assert!(msg.contains("TOTALLY_MISSING"), "should contain var name: {msg}");
+        assert!(!msg.contains("switch environments"), "no switch hint when undefined: {msg}");
     }
 }

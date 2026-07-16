@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from "react";
 import { useModuleContext } from "../../../shared/module-sdk";
 import { formatError } from "../../../shared/formatError";
 
@@ -17,11 +17,16 @@ function toSlug(input: string): string {
     .replace(/^-|-$/g, "");
 }
 
+export interface EnvSwitcherHandle {
+  reload: () => void;
+  activate: (envName: string) => void;
+}
+
 interface Props {
   onEditEnv?: (envName: string) => void;
 }
 
-export function EnvSwitcher({ onEditEnv }: Props) {
+export const EnvSwitcher = forwardRef<EnvSwitcherHandle, Props>(function EnvSwitcher({ onEditEnv }, ref) {
   const ctx = useModuleContext();
   const [envs, setEnvs] = useState<string[]>([]);
   const [active, setActive] = useState<string>(ctx.env.active());
@@ -47,6 +52,18 @@ export function EnvSwitcher({ onEditEnv }: Props) {
   useEffect(() => {
     loadEnvs();
   }, [loadEnvs]);
+
+  useImperativeHandle(ref, () => ({
+    reload: loadEnvs,
+    activate: (envName: string) => {
+      setActive(envName);
+      ctx.env.setActive(envName);
+      void ctx.invoke("core_set_pref", {
+        key: `activeEnv:${ctx.workspace.id}`,
+        value: envName,
+      }).catch(() => {});
+    },
+  }), [loadEnvs, ctx]);
 
   useEffect(() => {
     if (creating && inputRef.current) inputRef.current.focus();
@@ -187,4 +204,4 @@ export function EnvSwitcher({ onEditEnv }: Props) {
       )}
     </div>
   );
-}
+});

@@ -358,15 +358,29 @@ export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl
         <span className="text-xs font-medium text-adaka-muted">
           Collection
         </span>
-        <button
-          className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
-          title="New request"
-          onClick={() => createDraft()}
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-0.5">
+          {onImport && (
+            <button
+              className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text disabled:opacity-50"
+              title="Import from Postman"
+              onClick={onImport}
+              disabled={importing}
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+              </svg>
+            </button>
+          )}
+          <button
+            className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
+            title="New request"
+            onClick={() => createDraft()}
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1">

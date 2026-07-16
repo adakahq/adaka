@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
 import { useApiClientStore } from "./store";
@@ -6,6 +6,7 @@ import { CollectionTree } from "./components/CollectionTree";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
+import type { EnvSwitcherHandle } from "./components/EnvSwitcher";
 import { EnvEditor } from "./components/EnvEditor";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
 import { ImportReportPanel } from "./components/ImportReportPanel";
@@ -18,6 +19,7 @@ export function ApiClientRoute() {
   const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [importing, setImporting] = useState(false);
+  const envSwitcherRef = useRef<EnvSwitcherHandle>(null);
 
   const guardEnvEditor = useCallback(
     (proceed: () => void) => {
@@ -202,7 +204,13 @@ export function ApiClientRoute() {
       setImportReport(report);
       setImporting(false);
       await loadTree();
-      ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`);
+      envSwitcherRef.current?.reload();
+      if (report.generated_env) {
+        envSwitcherRef.current?.activate(report.generated_env);
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""} — switched to '${report.generated_env}' environment`);
+      } else {
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`);
+      }
     } catch (e) {
       setImporting(false);
       ctx.ui.toast(`Import failed: ${formatError(e)}`, "error");
@@ -274,7 +282,7 @@ export function ApiClientRoute() {
       <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-1.5">
         <span className="text-xs font-medium text-adaka-muted">API Client</span>
         <div className="ml-auto">
-          <EnvSwitcher onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
+          <EnvSwitcher ref={envSwitcherRef} onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
         </div>
       </div>
       {!baseUrlDismissed && (

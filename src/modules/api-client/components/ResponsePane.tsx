@@ -194,9 +194,10 @@ function HistoryBanner({ startedAt, onReturn }: { startedAt: string; onReturn: (
   );
 }
 
-function errorHint(code: string): string | null {
+function errorHint(code: string, message?: string): string | null {
   switch (code) {
     case "UNRESOLVED_VAR":
+      if (message && message.includes("switch environments")) return null;
       return "Pick an environment that defines this variable, or add it to your .adaka/environments/ file.";
     case "SECRET_UNAVAILABLE":
       return "Keychain integration is not yet available — replace the secret reference with a plain [vars] entry for now.";
@@ -214,7 +215,7 @@ function errorHint(code: string): string | null {
 }
 
 function ErrorPanel({ error }: { error: { code: string; message: string } }) {
-  const hint = errorHint(error.code);
+  const hint = errorHint(error.code, error.message);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4">
