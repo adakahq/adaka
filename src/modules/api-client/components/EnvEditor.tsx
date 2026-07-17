@@ -32,7 +32,7 @@ const adakaTheme = EditorView.theme({
 
 interface Props {
   envName: string;
-  onClose: () => void;
+  onClose?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
 
@@ -174,13 +174,15 @@ export function EnvEditor({ envName, onClose, onDirtyChange }: Props) {
               Save <kbd className="ml-1 text-[10px] opacity-60">Ctrl+S</kbd>
             </button>
           )}
-          <button
-            className="rounded px-2 py-0.5 text-xs text-adaka-muted hover:text-adaka-text"
-            onClick={onClose}
-            title="Close"
-          >
-            &times;
-          </button>
+          {onClose && (
+            <button
+              className="rounded px-2 py-0.5 text-xs text-adaka-muted hover:text-adaka-text"
+              onClick={onClose}
+              title="Close"
+            >
+              &times;
+            </button>
+          )}
         </div>
       </div>
       {parseError && (

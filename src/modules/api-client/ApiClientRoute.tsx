@@ -4,39 +4,15 @@ import { formatError } from "../../shared/formatError";
 import { useApiClientStore } from "./store";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
-import { EnvEditor } from "./components/EnvEditor";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
 import { ImportReportPanel } from "./components/ImportReportPanel";
 import type { SendResponse, StructuredError, HistoryListEntry } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
-  const [editingEnv, setEditingEnv] = useState<string | null>(null);
-  const [envEditorDirty, setEnvEditorDirty] = useState(false);
   const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
   const importReport = useApiClientStore((s) => s.importReport);
   const setImportReport = useApiClientStore((s) => s.setImportReport);
-
-  const guardEnvEditor = useCallback(
-    (proceed: () => void) => {
-      if (!envEditorDirty) {
-        proceed();
-        return;
-      }
-      ctx.ui.confirm({
-        title: "Unsaved environment changes",
-        detail: `You have unsaved changes to ${editingEnv ?? "the environment"}.toml. Discard them?`,
-        confirmLabel: "Discard",
-        destructive: true,
-        onConfirm: () => {
-          ctx.ui.dismissConfirm();
-          setEnvEditorDirty(false);
-          proceed();
-        },
-      });
-    },
-    [ctx, envEditorDirty, editingEnv],
-  );
 
   const {
     activeRequestPath,
@@ -122,16 +98,8 @@ export function ApiClientRoute() {
 
   const sendRequest = useCallback(() => {
     if (!activeRequest) return;
-    if (editingEnv) {
-      guardEnvEditor(() => {
-        setEditingEnv(null);
-        setEnvEditorDirty(false);
-        void doSend();
-      });
-    } else {
-      void doSend();
-    }
-  }, [activeRequest, editingEnv, guardEnvEditor, doSend]);
+    void doSend();
+  }, [activeRequest, doSend]);
 
   const cancelRequest = useCallback(async () => {
     const { activeRequestId } = useApiClientStore.getState();
@@ -196,14 +164,8 @@ export function ApiClientRoute() {
               onDismiss={() => setImportReport(null)}
               onOpenEnvEditor={(envName) => {
                 setImportReport(null);
-                guardEnvEditor(() => setEditingEnv(envName));
+                ctx.ui.openTab(`env:${envName}`, `${envName}.toml`);
               }}
-            />
-          ) : editingEnv ? (
-            <EnvEditor
-              envName={editingEnv}
-              onClose={() => guardEnvEditor(() => setEditingEnv(null))}
-              onDirtyChange={setEnvEditorDirty}
             />
           ) : (
             <ResponsePane />

@@ -1,5 +1,6 @@
 import { useShellStore } from "./store";
 import { useApiClientStore } from "../modules/api-client/store";
+import { isTabDirty, envNameFromTabId, ENV_TAB_PREFIX } from "./tab-dirty";
 
 export function TabBar() {
   const tabs = useShellStore((s) => s.tabs);
@@ -9,12 +10,17 @@ export function TabBar() {
   const showConfirm = useShellStore((s) => s.showConfirm);
   const dismissConfirm = useShellStore((s) => s.dismissConfirm);
   const apiDirty = useApiClientStore((s) => s.dirty);
+  const dirtyEnvs = useApiClientStore((s) => s.dirtyEnvs);
+  const setEnvDirty = useApiClientStore((s) => s.setEnvDirty);
 
   if (tabs.length === 0) return null;
 
   const handleClose = (tabId: string) => {
-    const isApiTab = tabId.startsWith("api-client:");
-    if (isApiTab && apiDirty) {
+    const finish = () => {
+      if (tabId.startsWith(ENV_TAB_PREFIX)) setEnvDirty(envNameFromTabId(tabId), false);
+      closeTab(tabId);
+    };
+    if (isTabDirty(tabId, { apiDirty, dirtyEnvs })) {
       showConfirm({
         title: "Unsaved changes",
         detail: "You have unsaved changes. Close without saving?",
@@ -22,18 +28,18 @@ export function TabBar() {
         destructive: true,
         onConfirm: () => {
           dismissConfirm();
-          closeTab(tabId);
+          finish();
         },
       });
       return;
     }
-    closeTab(tabId);
+    finish();
   };
 
   return (
     <div className="flex h-9 shrink-0 items-center gap-px overflow-x-auto border-b border-adaka-border bg-adaka-chrome px-1">
       {tabs.map((tab) => {
-        const isDirty = tab.id.startsWith("api-client:") && apiDirty;
+        const isDirty = isTabDirty(tab.id, { apiDirty, dirtyEnvs });
         return (
           <button
             key={tab.id}

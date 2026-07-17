@@ -4,7 +4,6 @@ import { getModules, type WorkspaceInfo } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { buildAllModuleContexts } from "./module-context";
 import { addRecent } from "../shared/recents";
-import { formatError } from "../shared/formatError";
 
 interface StructuredError {
   code: string;
@@ -169,23 +168,6 @@ export function switchWorkspace(path: string): void {
     });
   } else {
     proceed();
-  }
-}
-
-/**
- * Open a workspace in a second OS window, running independently of this
- * one. Both windows share the same Rust process (and its Mutex-guarded
- * prefs store), so there's no separate-process prefs corruption risk —
- * see core::prefs for the atomic-write + atomic-recents-update handling.
- */
-export async function openWorkspaceInNewWindow(directPath?: string): Promise<void> {
-  const selected = directPath ?? (await open({ directory: true, multiple: false }));
-  if (!selected) return;
-
-  try {
-    await invoke("workspace_open_new_window", { path: selected });
-  } catch (err: unknown) {
-    useShellStore.getState().addToast(formatError(err), "error");
   }
 }
 

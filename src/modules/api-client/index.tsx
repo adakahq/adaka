@@ -2,6 +2,7 @@ import { registerModule } from "../../shared/module-sdk";
 import type { AdakaModule, PaletteCommand } from "../../shared/module-sdk";
 import { ApiClientRoute } from "./ApiClientRoute";
 import { CollectionPanel } from "./components/CollectionPanel";
+import { EnvEditorRoute } from "./components/EnvEditorRoute";
 import { useApiClientStore } from "./store";
 
 const commands: PaletteCommand[] = [
@@ -60,7 +61,10 @@ const apiClientModule: AdakaModule = {
   id: "api-client",
   name: "API Client",
   icon: "globe",
-  routes: [{ path: "main", label: "API Client", component: ApiClientRoute }],
+  routes: [
+    { path: "main", label: "API Client", component: ApiClientRoute },
+    { path: "env", label: "Environment", component: EnvEditorRoute },
+  ],
   commands,
   contextPanel: {
     title: "Collection",

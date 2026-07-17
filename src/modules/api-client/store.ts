@@ -17,6 +17,9 @@ interface ApiClientState {
   viewingHistory: HistoryEntry | null;
   importReport: ImportReport | null;
   importing: boolean;
+  /** Per-env-tab dirty tracking, keyed by env name — several env tabs can
+   * be open at once, so this can't be a single boolean like `dirty`. */
+  dirtyEnvs: Record<string, boolean>;
 
   setTree: (tree: TreeNode[]) => void;
   setActiveRequestPath: (path: string | null) => void;
@@ -34,6 +37,7 @@ interface ApiClientState {
   createDraft: () => void;
   setImportReport: (report: ImportReport | null) => void;
   setImporting: (importing: boolean) => void;
+  setEnvDirty: (envName: string, dirty: boolean) => void;
 }
 
 export const useApiClientStore = create<ApiClientState>((set, get) => ({
@@ -52,6 +56,7 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
   viewingHistory: null,
   importReport: null,
   importing: false,
+  dirtyEnvs: {},
 
   setTree: (tree) => set({ tree }),
   setActiveRequestPath: (path) => set({ activeRequestPath: path }),
@@ -101,4 +106,6 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
     }),
   setImportReport: (report) => set({ importReport: report }),
   setImporting: (importing) => set({ importing }),
+  setEnvDirty: (envName, dirty) =>
+    set((s) => ({ dirtyEnvs: { ...s.dirtyEnvs, [envName]: dirty } })),
 }));

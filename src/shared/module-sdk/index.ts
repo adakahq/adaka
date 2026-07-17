@@ -14,6 +14,7 @@ export type {
   IconName,
   ModuleContext,
   ModuleRoute,
+  ModuleRouteProps,
   ModuleToggles,
   PaletteCommand,
   PanelAction,
