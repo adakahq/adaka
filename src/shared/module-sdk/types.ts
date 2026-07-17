@@ -65,12 +65,27 @@ export interface ModuleContext {
   };
 }
 
+export interface PanelAction {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  action: () => void;
+}
+
+export interface ContextPanelDef {
+  title: string;
+  component: React.ComponentType;
+  headerActions?: PanelAction[];
+  emptyState: { message: string; cta?: string };
+}
+
 export interface AdakaModule {
   id: string;
   name: string;
   icon: IconName;
   routes: ModuleRoute[];
   commands: PaletteCommand[];
+  contextPanel?: ContextPanelDef;
   onWorkspaceOpen?(ctx: ModuleContext): void | Promise<void>;
   onWorkspaceClose?(): void | Promise<void>;
 }

@@ -1,6 +1,7 @@
 import { registerModule } from "../../shared/module-sdk";
 import type { AdakaModule, PaletteCommand } from "../../shared/module-sdk";
 import { ApiClientRoute } from "./ApiClientRoute";
+import { CollectionPanel } from "./components/CollectionPanel";
 import { useApiClientStore } from "./store";
 
 const commands: PaletteCommand[] = [
@@ -61,6 +62,36 @@ const apiClientModule: AdakaModule = {
   icon: "globe",
   routes: [{ path: "main", label: "API Client", component: ApiClientRoute }],
   commands,
+  contextPanel: {
+    title: "Collection",
+    component: CollectionPanel,
+    headerActions: [
+      {
+        id: "import",
+        label: "Import from Postman",
+        icon: (
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+          </svg>
+        ),
+        action: () => window.dispatchEvent(new CustomEvent("adaka:import-postman")),
+      },
+      {
+        id: "new-request",
+        label: "New request",
+        icon: (
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+          </svg>
+        ),
+        action: () => useApiClientStore.getState().createDraft(),
+      },
+    ],
+    emptyState: {
+      message: "No requests yet — create one or import from Postman",
+      cta: "api:new-request",
+    },
+  },
 };
 
 registerModule(apiClientModule);

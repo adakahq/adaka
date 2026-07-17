@@ -38,6 +38,8 @@ interface ShellState {
   moduleContexts: Map<string, ModuleContext>;
   confirm: ConfirmPanel | null;
   showQuickCreate: boolean;
+  railCollapsed: boolean;
+  envReloadKey: number;
 
   setWorkspace: (ws: WorkspaceInfo | null) => void;
   setTheme: (t: Theme) => void;
@@ -53,6 +55,8 @@ interface ShellState {
   showConfirm: (panel: ConfirmPanel) => void;
   dismissConfirm: () => void;
   setShowQuickCreate: (show: boolean) => void;
+  setRailCollapsed: (collapsed: boolean) => void;
+  bumpEnvReload: () => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
@@ -67,6 +71,8 @@ export const useShellStore = create<ShellState>((set, get) => ({
   moduleContexts: new Map(),
   confirm: null,
   showQuickCreate: false,
+  railCollapsed: false,
+  envReloadKey: 0,
 
   setWorkspace: (ws) => set({ workspace: ws }),
   setTheme: (t) => set({ theme: t }),
@@ -110,4 +116,6 @@ export const useShellStore = create<ShellState>((set, get) => ({
   showConfirm: (panel) => set({ confirm: panel }),
   dismissConfirm: () => set({ confirm: null }),
   setShowQuickCreate: (show) => set({ showQuickCreate: show }),
+  setRailCollapsed: (collapsed) => set({ railCollapsed: collapsed }),
+  bumpEnvReload: () => set((s) => ({ envReloadKey: s.envReloadKey + 1 })),
 }));

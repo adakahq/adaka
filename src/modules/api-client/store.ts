@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RequestFile, SendResponse, StructuredError, TreeNode, HistoryListEntry, HistoryEntry } from "./types";
+import type { RequestFile, SendResponse, StructuredError, TreeNode, HistoryListEntry, HistoryEntry, ImportReport } from "./types";
 
 interface ApiClientState {
   tree: TreeNode[];
@@ -15,6 +15,8 @@ interface ApiClientState {
   prettyBody: boolean;
   historyEntries: HistoryListEntry[];
   viewingHistory: HistoryEntry | null;
+  importReport: ImportReport | null;
+  importing: boolean;
 
   setTree: (tree: TreeNode[]) => void;
   setActiveRequestPath: (path: string | null) => void;
@@ -30,6 +32,8 @@ interface ApiClientState {
   setViewingHistory: (entry: HistoryEntry | null) => void;
   updateRequest: (partial: Partial<RequestFile>) => void;
   createDraft: () => void;
+  setImportReport: (report: ImportReport | null) => void;
+  setImporting: (importing: boolean) => void;
 }
 
 export const useApiClientStore = create<ApiClientState>((set, get) => ({
@@ -46,6 +50,8 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
   prettyBody: true,
   historyEntries: [],
   viewingHistory: null,
+  importReport: null,
+  importing: false,
 
   setTree: (tree) => set({ tree }),
   setActiveRequestPath: (path) => set({ activeRequestPath: path }),
@@ -93,4 +99,6 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
       historyEntries: [],
       viewingHistory: null,
     }),
+  setImportReport: (report) => set({ importReport: report }),
+  setImporting: (importing) => set({ importing }),
 }));

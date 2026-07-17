@@ -1,5 +1,6 @@
 import { registerModule } from "../../shared/module-sdk";
 import type { AdakaModule, PaletteCommand } from "../../shared/module-sdk";
+import { ToolListPanel } from "./ToolListPanel";
 import {
   JsonRoute,
   JwtRoute,
@@ -24,6 +25,11 @@ const utilitiesModule: AdakaModule = {
   id: "utilities",
   name: "Utilities",
   icon: "wrench",
+  contextPanel: {
+    title: "Tools",
+    component: ToolListPanel,
+    emptyState: { message: "Developer utilities" },
+  },
   routes: [
     { path: "json", label: "JSON", component: JsonRoute },
     { path: "jwt", label: "JWT", component: JwtRoute },
