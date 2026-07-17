@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useShellStore } from "./store";
-import { closeWorkspace } from "./workspace-actions";
+import { closeWorkspace, switchWorkspace, openWorkspaceInNewWindow } from "./workspace-actions";
 import { getPref } from "../shared/prefs";
+import { getRecents, type RecentWorkspace } from "../shared/recents";
 
 export function TitleBar() {
   const workspace = useShellStore((s) => s.workspace);
@@ -16,7 +17,7 @@ export function TitleBar() {
           A
         </div>
         {workspace ? (
-          <WorkspaceMenu name={workspace.name} />
+          <WorkspaceMenu name={workspace.name} currentRoot={workspace.root} />
         ) : (
           <span className="text-sm font-medium text-adaka-muted">Adaka</span>
         )}
@@ -46,12 +47,14 @@ export function TitleBar() {
   );
 }
 
-function WorkspaceMenu({ name }: { name: string }) {
+function WorkspaceMenu({ name, currentRoot }: { name: string; currentRoot: string }) {
   const [open, setOpen] = useState(false);
+  const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    void getRecents().then(setRecents);
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -60,6 +63,8 @@ function WorkspaceMenu({ name }: { name: string }) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
+
+  const otherRecents = recents.filter((r) => r.path !== currentRoot);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -73,7 +78,7 @@ function WorkspaceMenu({ name }: { name: string }) {
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded border border-adaka-border bg-adaka-chrome py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded border border-adaka-border bg-adaka-chrome py-1 shadow-lg">
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-adaka-text hover:bg-adaka-border"
             onClick={() => {
@@ -89,6 +94,38 @@ function WorkspaceMenu({ name }: { name: string }) {
           >
             Reveal in Explorer
           </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-adaka-text hover:bg-adaka-border"
+            onClick={() => {
+              setOpen(false);
+              void openWorkspaceInNewWindow();
+            }}
+          >
+            Open workspace in new window…
+          </button>
+
+          {otherRecents.length > 0 && (
+            <>
+              <div className="my-1 border-t border-adaka-border" />
+              <p className="px-3 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-adaka-faint">
+                Recent workspaces
+              </p>
+              {otherRecents.slice(0, 5).map((r) => (
+                <button
+                  key={r.path}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-adaka-text hover:bg-adaka-border"
+                  onClick={() => {
+                    setOpen(false);
+                    switchWorkspace(r.path);
+                  }}
+                  title={r.path}
+                >
+                  <span className="truncate">{r.name}</span>
+                </button>
+              ))}
+            </>
+          )}
+
           <div className="my-1 border-t border-adaka-border" />
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 hover:bg-adaka-border"

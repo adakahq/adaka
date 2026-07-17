@@ -88,4 +88,7 @@ export interface AdakaModule {
   contextPanel?: ContextPanelDef;
   onWorkspaceOpen?(ctx: ModuleContext): void | Promise<void>;
   onWorkspaceClose?(): void | Promise<void>;
+  /** Unsaved changes the module is holding right now. Checked before an
+   * action that would discard state — e.g. switching workspaces. */
+  isDirty?(): boolean;
 }

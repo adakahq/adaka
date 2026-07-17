@@ -33,12 +33,48 @@ every panel collapsible and resizable. Familiar bones, our soul, no wasted pixel
 
 ## 2. Title bar
 
-- Left: gold logo mark + workspace name (click → workspace menu: close workspace,
-  reveal folder, recent workspaces).
+- Left: gold logo mark + workspace name (click → workspace menu: reveal folder,
+  open workspace in new window, recent workspaces for one-click switching, close
+  workspace).
 - Center: search/command affordance — a visible field-shaped button labeled
   "Search or run a command · Ctrl+K" opening the palette. The palette IS the search.
 - Right: Variables (environment) selector + gear — always visible, never buried in a
   module toolbar again.
+
+### 2.1 Multi-window decision
+
+One workspace per window; no in-window multi-workspace tabs. "Open workspace in new
+window…" spawns a second OS window (`tauri::WebviewWindowBuilder`, label `ws-<uuid>`)
+running the same app bundle, sharing the single Rust process — so both windows share
+one `PrefsStore` instance behind one `Mutex`, and workspace file I/O uses the same
+scoped-path + atomic-write core regardless of which window issued it. No IPC or
+locking scheme was needed across processes because there's only ever one process.
+
+The workspace path can't ride the new window's URL/argv (Tauri windows don't get
+their own process args), so it's handed off via a small pending-path map on the Rust
+side, keyed by the new window's label and claimed once by the frontend on mount
+(`workspace_open_new_window` / `workspace_take_pending_window_path`).
+
+Switching workspaces *within* a window (via the recent-workspaces list) reuses the
+existing close+open flow, guarded by a new `AdakaModule.isDirty()` SDK hook so an
+in-progress edit isn't silently discarded.
+
+Two prefs-safety gaps this surfaced, fixed as part of this work:
+- `PrefsStore::flush` used `File::create` (truncate-in-place); a crash mid-write
+  could leave `prefs.json` corrupt. Now temp-file + fsync + rename, matching the
+  workspace-file atomic-write pattern.
+- `recentWorkspaces` was read-modify-written from the frontend as two separate IPC
+  calls (`core_get_pref` then `core_set_pref`); two windows opening workspaces
+  close together could race and drop an entry. Moved to atomic Rust-side commands
+  (`core_add_recent_workspace` / `core_remove_recent_workspace`) that do the
+  read-modify-write under one lock acquisition. Other scalar prefs (theme,
+  `railCollapsed`, per-workspace `activeEnv:*`) are unaffected by cross-window
+  contention (distinct keys or low-stakes last-write-wins) and were left as is.
+
+**Deferred:** in-window multi-workspace tabs (switching workspaces without closing
+the current one, keeping multiple workspaces' tab strips alive in one window). New
+windows are the only multi-workspace mechanism for now; revisit if users want to
+juggle workspaces without extra OS windows.
 
 ## 3. Module rail (left edge)
 

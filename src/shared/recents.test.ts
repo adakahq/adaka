@@ -1,19 +1,44 @@
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
-let mockStore: Record<string, unknown> = {};
+interface MockRecent {
+  name: string;
+  path: string;
+  lastOpened: string;
+}
+
+let mockList: MockRecent[] = [];
+
+// addRecent/removeRecent are implemented as Rust commands (see prefs.rs) so
+// two windows adding a recent workspace at nearly the same time can't race
+// each other via separate get-pref/set-pref round trips. Mock the same
+// add-or-bump / cap-at-8 / remove-by-path behavior here.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === "core_add_recent_workspace") {
+      const { name, path, lastOpened } = args as { name: string; path: string; lastOpened: string };
+      mockList = mockList.filter((r) => r.path !== path);
+      mockList.unshift({ name, path, lastOpened });
+      mockList = mockList.slice(0, 8);
+      return mockList;
+    }
+    if (cmd === "core_remove_recent_workspace") {
+      const { path } = args as { path: string };
+      mockList = mockList.filter((r) => r.path !== path);
+      return mockList;
+    }
+    throw new Error(`unexpected invoke: ${cmd}`);
+  }),
+}));
 
 vi.mock("./prefs", () => ({
-  getPref: vi.fn(async (key: string) => mockStore[key] ?? null),
-  setPref: vi.fn(async (key: string, value: unknown) => {
-    mockStore[key] = value;
-  }),
+  getPref: vi.fn(async (key: string) => (key === "recentWorkspaces" ? mockList : null)),
 }));
 
 import { getRecents, addRecent, removeRecent } from "./recents";
 
 describe("recents", () => {
   beforeEach(() => {
-    mockStore = {};
+    mockList = [];
   });
 
   test("getRecents returns empty array initially", async () => {

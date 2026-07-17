@@ -72,6 +72,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(events::EventBus::new())
+        .manage(workspace::PendingWindowWorkspaces::new())
         .setup(|app| {
             let app_data = app
                 .path()
@@ -89,12 +90,16 @@ pub fn run() {
             workspace::workspace_reveal_path,
             workspace::workspace_default_dir,
             workspace::workspace_quick_create,
+            workspace::workspace_open_new_window,
+            workspace::workspace_take_pending_window_path,
             env::env_list,
             env::env_resolve,
             events::core_emit_event,
             events::core_recent_events,
             prefs::core_get_pref,
             prefs::core_set_pref,
+            prefs::core_add_recent_workspace,
+            prefs::core_remove_recent_workspace,
             api_client::api_list_requests,
             api_client::api_parse_request,
             api_client::api_parse_collection,

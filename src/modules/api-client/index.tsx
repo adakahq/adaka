@@ -92,6 +92,7 @@ const apiClientModule: AdakaModule = {
       cta: "api:new-request",
     },
   },
+  isDirty: () => useApiClientStore.getState().dirty,
 };
 
 registerModule(apiClientModule);

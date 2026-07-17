@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -455,6 +457,68 @@ pub fn workspace_delete_file(path: String, relative: String) -> Result<(), Works
 #[tauri::command]
 pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), WorkspaceError> {
     reveal_path(Path::new(&path), &relative)
+}
+
+// ---------------------------------------------------------------------------
+// Multi-window: "Open workspace in new window…"
+//
+// A second window loads the same `index.html` bundle with no way to pass it
+// a workspace path via argv (Tauri windows don't get their own process args).
+// Instead we stash the path here, keyed by the new window's label, and the
+// frontend calls `workspace_take_pending_window_path` with its own label
+// (read via `getCurrentWindow().label`) once mounted. `Mutex` serializes
+// access if two "open in new window" calls land back to back.
+// ---------------------------------------------------------------------------
+
+pub struct PendingWindowWorkspaces(Mutex<HashMap<String, PathBuf>>);
+
+impl PendingWindowWorkspaces {
+    pub fn new() -> Self {
+        Self(Mutex::new(HashMap::new()))
+    }
+}
+
+impl Default for PendingWindowWorkspaces {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[tauri::command]
+pub fn workspace_open_new_window(
+    app: tauri::AppHandle,
+    path: String,
+    pending: tauri::State<'_, PendingWindowWorkspaces>,
+) -> Result<(), String> {
+    let label = format!("ws-{}", uuid::Uuid::new_v4().simple());
+    {
+        let mut map = pending
+            .0
+            .lock()
+            .expect("pending window workspaces lock poisoned");
+        map.insert(label.clone(), PathBuf::from(path));
+    }
+
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+        .title("Adaka")
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(800.0, 600.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn workspace_take_pending_window_path(
+    label: String,
+    pending: tauri::State<'_, PendingWindowWorkspaces>,
+) -> Option<String> {
+    let mut map = pending
+        .0
+        .lock()
+        .expect("pending window workspaces lock poisoned");
+    map.remove(&label).map(|p| p.to_string_lossy().to_string())
 }
 
 #[tauri::command]
