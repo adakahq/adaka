@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useShortcut } from "../shared/useShortcut";
 import { useGlobalStore, type Theme } from "./global-store";
 import { useWorkspaceTabsStore, type WorkspaceTab } from "./workspace-tabs-store";
-import { hydrateWorkspaceTabs } from "./workspace-actions";
+import { hydrateWorkspaceTabs, openSettingsTab } from "./workspace-actions";
 import { WorkspaceTabProvider } from "./workspace-tab-context";
 import { WorkspaceTabStrip } from "./WorkspaceTabStrip";
 import { TitleBar } from "./TitleBar";
@@ -56,24 +57,22 @@ function KeyboardShortcuts() {
   const shortcutsOpen = useGlobalStore((s) => s.shortcutsOpen);
   const addWelcomeTab = useWorkspaceTabsStore((s) => s.addWelcomeTab);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setPaletteOpen(!paletteOpen);
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
-        e.preventDefault();
-        setShortcutsOpen(!shortcutsOpen);
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
-        e.preventDefault();
-        addWelcomeTab();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paletteOpen, setPaletteOpen, shortcutsOpen, setShortcutsOpen, addWelcomeTab]);
+  useShortcut("palette", (e) => {
+    e.preventDefault();
+    setPaletteOpen(!paletteOpen);
+  });
+  useShortcut("shortcuts", (e) => {
+    e.preventDefault();
+    setShortcutsOpen(!shortcutsOpen);
+  });
+  useShortcut("new-workspace-tab", (e) => {
+    e.preventDefault();
+    addWelcomeTab();
+  });
+  useShortcut("settings", (e) => {
+    e.preventDefault();
+    openSettingsTab();
+  });
 
   return null;
 }

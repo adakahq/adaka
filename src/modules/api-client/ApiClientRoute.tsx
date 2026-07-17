@@ -1,6 +1,7 @@
-import { useEffect, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
+import { useShortcut } from "../../shared/useShortcut";
 import { useApiClientStore, useApiClientStoreApi } from "./store";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
@@ -23,6 +24,7 @@ export function ApiClientRoute() {
     setError,
     dirty,
     activeRequest,
+    viewingHistory,
   } = useApiClientStore((s) => s);
 
   const loadHistory = useCallback(
@@ -114,36 +116,30 @@ export function ApiClientRoute() {
     setSending(false);
   }, [ctx, api, setSending]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        if (sending) {
-          void cancelRequest();
-        } else {
-          sendRequest();
-        }
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        if (dirty) void saveRequest();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "h") {
-        e.preventDefault();
-        api.getState().setResponseTab("history");
-      }
-      if (e.key === "Escape") {
-        const { viewingHistory } = api.getState();
-        if (viewingHistory) {
-          e.preventDefault();
-          api.getState().setViewingHistory(null);
-        }
-      }
+  useShortcut("send", (e) => {
+    e.preventDefault();
+    if (sending) {
+      void cancelRequest();
+    } else {
+      sendRequest();
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sending, sendRequest, cancelRequest, saveRequest, dirty, api]);
+  });
+  useShortcut("save", (e) => {
+    e.preventDefault();
+    if (dirty) void saveRequest();
+  });
+  useShortcut("history", (e) => {
+    e.preventDefault();
+    api.getState().setResponseTab("history");
+  });
+  useShortcut(
+    "close-history-view",
+    (e) => {
+      e.preventDefault();
+      api.getState().setViewingHistory(null);
+    },
+    { enabled: viewingHistory != null },
+  );
 
   return (
     <div className="flex h-full flex-col">

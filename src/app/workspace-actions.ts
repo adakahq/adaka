@@ -13,6 +13,7 @@ import {
 } from "./workspace-tabs-store";
 import { getApiClientStore, disposeApiClientStore } from "../modules/api-client/store";
 import { isTabDirty } from "./tab-dirty";
+import { getPref } from "../shared/prefs";
 
 interface StructuredError {
   code: string;
@@ -194,6 +195,9 @@ export function openWorkspaceInTab(path: string): void {
  * to a single welcome tab if nothing was persisted, or if every persisted
  * path fails to reopen (moved/deleted). Call once from App.tsx on mount. */
 export async function hydrateWorkspaceTabs(): Promise<void> {
+  const reopenLastSession = await getPref<boolean>("reopenLastSession");
+  if (reopenLastSession === false) return; // Settings § General — user opted out
+
   const { paths, activePath } = await getPersistedWorkspaceTabs();
   if (paths.length === 0) return; // the pre-seeded welcome tab already covers this
 
@@ -233,6 +237,26 @@ export async function hydrateWorkspaceTabs(): Promise<void> {
   if (activeTabId) {
     useWorkspaceTabsStore.getState().setActiveTab(activeTabId);
   }
+}
+
+/** Opens the Settings item tab in the active workspace tab (Ctrl+,, rail
+ * gear, palette "Settings"). Settings is app-level chrome, not a module, so
+ * it's opened directly with a reserved moduleId rather than through the
+ * module registry (see MainPane's "app" special-case). */
+export function openSettingsTab(): void {
+  const activeTab = useWorkspaceTabsStore
+    .getState()
+    .tabs.find((t) => t.id === useWorkspaceTabsStore.getState().activeTabId);
+  if (!activeTab || !isOpenWorkspaceTab(activeTab)) {
+    useGlobalStore.getState().addToast("Open a workspace first", "error");
+    return;
+  }
+  activeTab.session.shellStore.getState().openTab({
+    id: "app:settings",
+    label: "Settings",
+    moduleId: "app",
+    routePath: "settings",
+  });
 }
 
 export { isStructuredError, type StructuredError };

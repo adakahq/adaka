@@ -72,6 +72,11 @@ competing with the item tabs below it).
   saved (prefs) and restored on next launch, so a session picks back up where it
   left off.
 - No workspace open (all tabs closed) shows welcome-in-a-tab, not a blank frame.
+- Sized for breathing room (36px strip, generous tab padding), not crammed to
+  match the item-tab strip below it. When tabs overflow the available width, only
+  the tab list itself scrolls horizontally — `+` sits outside that scroll region
+  as a fixed sibling so it's always reachable, never pushed off-screen behind an
+  overflowing tab list.
 
 ### 2.2 Per-workspace state architecture
 
@@ -116,6 +121,33 @@ concern.
 - Active module: gold icon + label + soft background per skill. Gold rule unchanged.
 - Modules not yet installed (Mail/DB/Logs pre-M3/4/5) render muted with a "soon"
   tooltip — the roadmap visible in the chrome, aspirational not broken.
+
+### 3.1 Settings
+
+Files-explorer style, opened as an item tab (§6) — not a module, not a modal — via
+the rail gear, the palette ("Settings"), or `Ctrl+,`. Left section nav, right
+content pane: **General** (default workspace folder, editable — where quick-create
+and the folder picker default to; reopen-last-session toggle), **Appearance**
+(theme: dark active, light disabled with a "coming soon" label — never a dead
+control that looks live; rail-collapsed-by-default), **Shortcuts** (renders the
+keyboard shortcut registry read-only, points at `Ctrl+/` for the live overlay),
+**About** (version, links, one-line pitch). Every field persists immediately via
+prefs — no save button, nothing to lose. Implemented as an `app`-level tab
+(`moduleId: "app"`) special-cased in `MainPane`, not a real module — Settings has
+no workspace-scoped state of its own and modules can't reach `app/` code anyway.
+
+### 3.2 Keyboard shortcut registry
+
+`src/shared/shortcuts.ts` is the single source of truth for every keybinding in
+the app — id, label, key combo, scope. `useShortcut(id, handler, opts)`
+(`src/shared/useShortcut.ts`) is the *only* sanctioned way to bind one; it looks
+the id up in the registry so the `Ctrl+/` overlay and the Settings → Shortcuts
+section can never drift from what's actually wired up. A bare
+`window.addEventListener("keydown", …)` outside that hook is a review-blocking
+defect for exactly that reason — it can silently diverge from the documented
+list. Scoped, element-local `onKeyDown` handlers (list navigation, rename-inline
+Enter/Escape, F2/Delete on a focused tree row) are not global shortcuts and are
+exempt.
 
 ## 4. Context panel (the dynamic sidebar)
 

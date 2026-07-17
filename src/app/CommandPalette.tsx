@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
 import { useGlobalStore } from "./global-store";
 import { useWorkspaceTabsStore, type WorkspaceTab } from "./workspace-tabs-store";
-import { openWorkspace, closeWorkspaceTab } from "./workspace-actions";
+import { openWorkspace, closeWorkspaceTab, openSettingsTab } from "./workspace-actions";
 
 interface ResolvedCommand {
   cmd: PaletteCommand;
@@ -130,6 +130,16 @@ export function CommandPalette() {
         label: "Close workspace",
         keywords: ["exit", "leave"],
         action: () => closeWorkspaceTab(activeTab.id),
+      },
+      ctx: null,
+      moduleId: null,
+    });
+    builtins.push({
+      cmd: {
+        id: "builtin:settings",
+        label: "Settings",
+        keywords: ["preferences", "config"],
+        action: () => openSettingsTab(),
       },
       ctx: null,
       moduleId: null,

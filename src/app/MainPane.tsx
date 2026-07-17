@@ -1,6 +1,7 @@
 import { getModules, ModuleContextProvider } from "../shared/module-sdk";
 import { useShellStore } from "./store";
 import { WorkspaceHome } from "./WorkspaceHome";
+import { SettingsRoute } from "./SettingsRoute";
 
 export function MainPane() {
   const activeTabId = useShellStore((s) => s.activeTabId);
@@ -10,6 +11,17 @@ export function MainPane() {
 
   if (!activeTab) {
     return <WorkspaceHome />;
+  }
+
+  // Settings is app-level chrome, not a module route — special-cased here
+  // rather than registered in the module registry, which modules/* can't
+  // reach from src/app/ anyway (boundary rules).
+  if (activeTab.moduleId === "app" && activeTab.routePath === "settings") {
+    return (
+      <div className="flex-1 overflow-hidden">
+        <SettingsRoute />
+      </div>
+    );
   }
 
   const mod = getModules().find((m) => m.id === activeTab.moduleId);

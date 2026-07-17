@@ -1,21 +1,18 @@
-import { useEffect } from "react";
 import { useGlobalStore } from "./global-store";
+import { useShortcut } from "../shared/useShortcut";
 
 export function ConfirmPanel() {
   const confirm = useGlobalStore((s) => s.confirm);
   const dismiss = useGlobalStore((s) => s.dismissConfirm);
 
-  useEffect(() => {
-    if (!confirm) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        dismiss();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [confirm, dismiss]);
+  useShortcut(
+    "dismiss",
+    (e) => {
+      e.stopPropagation();
+      dismiss();
+    },
+    { enabled: confirm != null, capture: true },
+  );
 
   if (!confirm) return null;
 
