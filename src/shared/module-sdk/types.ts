@@ -6,10 +6,19 @@ export type IconName =
   | "terminal"
   | "puzzle";
 
+/** Props every route component may receive. `routeParam` carries whatever
+ * follows the first `:` in the tab's route (e.g. `"env:staging"` → the
+ * route matches path `"env"` and the component gets `routeParam="staging"`)
+ * — lets one registered route back many tabs (one per env file, per open
+ * request, etc.) without a route entry per instance. */
+export interface ModuleRouteProps {
+  routeParam?: string;
+}
+
 export interface ModuleRoute {
   path: string;
   label: string;
-  component: React.ComponentType;
+  component: React.ComponentType<ModuleRouteProps>;
 }
 
 export interface PaletteCommand {
@@ -59,10 +68,27 @@ export interface ModuleContext {
   };
   ui: {
     toast(msg: string, kind?: ToastKind): void;
-    openTab(route: string): void;
+    /** `route` may be `"path"` or `"path:param"` — see ModuleRouteProps.
+     * `label` overrides the route's static label (needed when one route
+     * backs several tabs, e.g. one per env file). */
+    openTab(route: string, label?: string): void;
     confirm(options: ConfirmOptions): void;
     dismissConfirm(): void;
   };
+}
+
+export interface PanelAction {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  action: () => void;
+}
+
+export interface ContextPanelDef {
+  title: string;
+  component: React.ComponentType;
+  headerActions?: PanelAction[];
+  emptyState: { message: string; cta?: string };
 }
 
 export interface AdakaModule {
@@ -71,6 +97,10 @@ export interface AdakaModule {
   icon: IconName;
   routes: ModuleRoute[];
   commands: PaletteCommand[];
+  contextPanel?: ContextPanelDef;
   onWorkspaceOpen?(ctx: ModuleContext): void | Promise<void>;
   onWorkspaceClose?(): void | Promise<void>;
+  /** Unsaved changes the module is holding right now. Checked before an
+   * action that would discard state — e.g. switching workspaces. */
+  isDirty?(): boolean;
 }

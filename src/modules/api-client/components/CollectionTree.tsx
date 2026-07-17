@@ -348,41 +348,12 @@ export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl
 
   return (
     <div
-      className="flex w-60 min-w-[180px] flex-col overflow-hidden border-r border-adaka-border bg-adaka-chrome"
+      className="flex h-full flex-col overflow-hidden"
       onContextMenu={(e) => {
         if (e.target === e.currentTarget)
           handleContextMenu(e, null, "requests");
       }}
     >
-      <div className="flex items-center justify-between border-b border-adaka-border px-3 py-2">
-        <span className="text-xs font-medium text-adaka-muted">
-          Collection
-        </span>
-        <div className="flex items-center gap-0.5">
-          {onImport && (
-            <button
-              className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text disabled:opacity-50"
-              title="Import from Postman"
-              onClick={onImport}
-              disabled={importing}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-              </svg>
-            </button>
-          )}
-          <button
-            className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
-            title="New request"
-            onClick={() => createDraft()}
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">

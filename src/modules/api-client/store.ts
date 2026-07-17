@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RequestFile, SendResponse, StructuredError, TreeNode, HistoryListEntry, HistoryEntry } from "./types";
+import type { RequestFile, SendResponse, StructuredError, TreeNode, HistoryListEntry, HistoryEntry, ImportReport } from "./types";
 
 interface ApiClientState {
   tree: TreeNode[];
@@ -15,6 +15,11 @@ interface ApiClientState {
   prettyBody: boolean;
   historyEntries: HistoryListEntry[];
   viewingHistory: HistoryEntry | null;
+  importReport: ImportReport | null;
+  importing: boolean;
+  /** Per-env-tab dirty tracking, keyed by env name — several env tabs can
+   * be open at once, so this can't be a single boolean like `dirty`. */
+  dirtyEnvs: Record<string, boolean>;
 
   setTree: (tree: TreeNode[]) => void;
   setActiveRequestPath: (path: string | null) => void;
@@ -30,6 +35,9 @@ interface ApiClientState {
   setViewingHistory: (entry: HistoryEntry | null) => void;
   updateRequest: (partial: Partial<RequestFile>) => void;
   createDraft: () => void;
+  setImportReport: (report: ImportReport | null) => void;
+  setImporting: (importing: boolean) => void;
+  setEnvDirty: (envName: string, dirty: boolean) => void;
 }
 
 export const useApiClientStore = create<ApiClientState>((set, get) => ({
@@ -46,6 +54,9 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
   prettyBody: true,
   historyEntries: [],
   viewingHistory: null,
+  importReport: null,
+  importing: false,
+  dirtyEnvs: {},
 
   setTree: (tree) => set({ tree }),
   setActiveRequestPath: (path) => set({ activeRequestPath: path }),
@@ -93,4 +104,8 @@ export const useApiClientStore = create<ApiClientState>((set, get) => ({
       historyEntries: [],
       viewingHistory: null,
     }),
+  setImportReport: (report) => set({ importReport: report }),
+  setImporting: (importing) => set({ importing }),
+  setEnvDirty: (envName, dirty) =>
+    set((s) => ({ dirtyEnvs: { ...s.dirtyEnvs, [envName]: dirty } })),
 }));

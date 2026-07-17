@@ -137,4 +137,38 @@ export function closeWorkspace(): void {
   }
 }
 
+function anyModuleDirty(): boolean {
+  return getModules().some((mod) => mod.isDirty?.() ?? false);
+}
+
+/**
+ * Switch the current window to a different workspace, guarding on unsaved
+ * changes first — closing the active workspace discards module state
+ * (tabs, drafts), so an unguarded switch would silently lose work.
+ */
+export function switchWorkspace(path: string): void {
+  const current = useShellStore.getState().workspace;
+  if (current?.root === path) return;
+
+  const proceed = () => {
+    closeWorkspace();
+    void openWorkspace(path);
+  };
+
+  if (anyModuleDirty()) {
+    useShellStore.getState().showConfirm({
+      title: "Unsaved changes",
+      detail: "Switching workspaces will discard unsaved changes in this window. Discard them?",
+      confirmLabel: "Discard & switch",
+      destructive: true,
+      onConfirm: () => {
+        useShellStore.getState().dismissConfirm();
+        proceed();
+      },
+    });
+  } else {
+    proceed();
+  }
+}
+
 export { isStructuredError, type StructuredError };

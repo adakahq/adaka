@@ -1,4 +1,5 @@
-import { getPref, setPref } from "./prefs";
+import { invoke } from "@tauri-apps/api/core";
+import { getPref } from "./prefs";
 
 export interface RecentWorkspace {
   name: string;
@@ -7,27 +8,27 @@ export interface RecentWorkspace {
 }
 
 const PREF_KEY = "recentWorkspaces";
-const MAX_RECENTS = 8;
 
 export async function getRecents(): Promise<RecentWorkspace[]> {
   const raw = await getPref<RecentWorkspace[]>(PREF_KEY);
   return Array.isArray(raw) ? raw : [];
 }
 
+/**
+ * Add-or-bump a recent workspace. Delegates the read-modify-write to a Rust
+ * command (core_add_recent_workspace) instead of doing get-pref/set-pref as
+ * two separate IPC calls here — with two windows open, a second window's
+ * write could otherwise land between this window's get and set and get
+ * silently overwritten. The Rust side does it under one lock.
+ */
 export async function addRecent(entry: Omit<RecentWorkspace, "lastOpened">): Promise<RecentWorkspace[]> {
-  const list = await getRecents();
-  const filtered = list.filter((r) => r.path !== entry.path);
-  const updated: RecentWorkspace[] = [
-    { ...entry, lastOpened: new Date().toISOString() },
-    ...filtered,
-  ].slice(0, MAX_RECENTS);
-  await setPref(PREF_KEY, updated);
-  return updated;
+  return invoke<RecentWorkspace[]>("core_add_recent_workspace", {
+    name: entry.name,
+    path: entry.path,
+    lastOpened: new Date().toISOString(),
+  });
 }
 
 export async function removeRecent(path: string): Promise<RecentWorkspace[]> {
-  const list = await getRecents();
-  const updated = list.filter((r) => r.path !== path);
-  await setPref(PREF_KEY, updated);
-  return updated;
+  return invoke<RecentWorkspace[]>("core_remove_recent_workspace", { path });
 }

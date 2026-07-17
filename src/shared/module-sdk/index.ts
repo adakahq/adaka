@@ -10,11 +10,14 @@
  */
 export type {
   AdakaModule,
+  ContextPanelDef,
   IconName,
   ModuleContext,
   ModuleRoute,
+  ModuleRouteProps,
   ModuleToggles,
   PaletteCommand,
+  PanelAction,
   ToastKind,
   WorkspaceInfo,
 } from "./types";

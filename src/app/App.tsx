@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useShellStore } from "./store";
-import { Sidebar } from "./Sidebar";
+import { TitleBar } from "./TitleBar";
+import { ModuleRail } from "./ModuleRail";
+import { ContextPanel } from "./ContextPanel";
 import { TabBar } from "./TabBar";
 import { MainPane } from "./MainPane";
+import { StatusBar } from "./StatusBar";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { CommandPalette } from "./CommandPalette";
 import { Toasts } from "./Toasts";
@@ -72,9 +75,9 @@ function Shell() {
 
   if (!workspace) {
     return (
-      <div className="flex h-full bg-adaka-bg text-adaka-text">
-        <Sidebar />
-        <div className="flex flex-1 flex-col">
+      <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
+        <TitleBar />
+        <div className="flex flex-1 overflow-hidden">
           <WelcomeScreen />
         </div>
         <CommandPalette />
@@ -86,12 +89,17 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full bg-adaka-bg text-adaka-text">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <TabBar />
-        <MainPane />
+    <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
+      <TitleBar />
+      <div className="flex flex-1 overflow-hidden">
+        <ModuleRail />
+        <ContextPanel />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <TabBar />
+          <MainPane />
+        </div>
       </div>
+      <StatusBar />
       <CommandPalette />
       <ConfirmPanel />
       <ShortcutOverlay />

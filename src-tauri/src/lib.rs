@@ -95,6 +95,8 @@ pub fn run() {
             events::core_recent_events,
             prefs::core_get_pref,
             prefs::core_set_pref,
+            prefs::core_add_recent_workspace,
+            prefs::core_remove_recent_workspace,
             api_client::api_list_requests,
             api_client::api_parse_request,
             api_client::api_parse_collection,

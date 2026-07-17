@@ -36,13 +36,14 @@ export function buildModuleContext(
     ui: {
       toast: (msg: string, kind?: "info" | "error") =>
         useShellStore.getState().addToast(msg, kind),
-      openTab: (route: string) => {
+      openTab: (route: string, label?: string) => {
         const mod = getModules().find((m) => m.id === moduleId);
-        const routeDef = mod?.routes.find((r) => r.path === route);
-        const label = routeDef?.label ?? route;
+        const routeBase = route.split(":")[0];
+        const routeDef = mod?.routes.find((r) => r.path === routeBase);
+        const resolvedLabel = label ?? routeDef?.label ?? route;
         useShellStore.getState().openTab({
           id: `${moduleId}:${route}`,
-          label,
+          label: resolvedLabel,
           moduleId,
           routePath: route,
         });

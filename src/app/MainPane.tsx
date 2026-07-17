@@ -13,7 +13,9 @@ export function MainPane() {
   }
 
   const mod = getModules().find((m) => m.id === activeTab.moduleId);
-  const route = mod?.routes.find((r) => r.path === activeTab.routePath);
+  const [routeBase, ...paramParts] = activeTab.routePath.split(":");
+  const routeParam = paramParts.length > 0 ? paramParts.join(":") : undefined;
+  const route = mod?.routes.find((r) => r.path === routeBase);
 
   if (!route) {
     return (
@@ -30,10 +32,10 @@ export function MainPane() {
     <div className="flex-1 overflow-auto">
       {ctx ? (
         <ModuleContextProvider value={ctx}>
-          <Component />
+          <Component routeParam={routeParam} />
         </ModuleContextProvider>
       ) : (
-        <Component />
+        <Component routeParam={routeParam} />
       )}
     </div>
   );

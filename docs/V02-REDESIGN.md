@@ -33,12 +33,24 @@ every panel collapsible and resizable. Familiar bones, our soul, no wasted pixel
 
 ## 2. Title bar
 
-- Left: gold logo mark + workspace name (click → workspace menu: close workspace,
-  reveal folder, recent workspaces).
+- Left: gold logo mark + workspace name (click → workspace menu: reveal folder,
+  recent workspaces for one-click switching, close workspace).
 - Center: search/command affordance — a visible field-shaped button labeled
   "Search or run a command · Ctrl+K" opening the palette. The palette IS the search.
 - Right: Variables (environment) selector + gear — always visible, never buried in a
   module toolbar again.
+
+Switching workspaces via the recent-workspaces list reuses the existing close+open
+flow, guarded by an `AdakaModule.isDirty()` SDK hook so an in-progress edit isn't
+silently discarded. One workspace per window; no multi-window and no in-window
+multi-workspace tabs — out of scope for now.
+
+`recentWorkspaces` is read-modify-written on the Rust side under a single lock
+(`core_add_recent_workspace` / `core_remove_recent_workspace`) rather than as a
+get-pref/set-pref round trip from the frontend, and `PrefsStore::flush` writes via
+temp-file + fsync + rename instead of truncating in place — both defend against a
+crash mid-write leaving `prefs.json` corrupt, independent of any multi-window
+concern.
 
 ## 3. Module rail (left edge)
 
@@ -110,9 +122,12 @@ workspace — the local-first identity, permanently visible.
 
 1. `v02-frame` — title bar, rail with labels+collapse, status bar, module switching;
    context panel SDK surface added with APIs + Tools providing panels; old sidebar
-   removed. (Biggest branch; pure restructure, no feature change.)
-2. `v02-api-stacked` — stacked request/response with draggable divider; env editor
-   becomes an item tab; response strip consolidation.
+   removed. (Biggest branch; pure restructure, no feature change.) Env editor as an
+   item tab landed early here too — the frame restructure had dropped the only
+   entry point into it (the old inline edit button), so it was a regression fix
+   rather than something that could wait for `v02-api-stacked`.
+2. `v02-api-stacked` — stacked request/response with draggable divider; response
+   strip consolidation.
 3. `v02-panels-dynamic` — resize/collapse behaviors + per-workspace persistence;
    panel empty states per module.
 4. `v02-polish` — welcome restyle, overflow behaviors, keyboard pass (Ctrl+Tab,
