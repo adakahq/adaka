@@ -104,6 +104,9 @@ pub fn run() {
             api_client::api_cancel_request,
             api_client::api_history_list,
             api_client::api_history_get,
+            api_client::api_import_postman,
+            api_client::api_parse_curl,
+            api_client::api_export_curl,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Adaka");

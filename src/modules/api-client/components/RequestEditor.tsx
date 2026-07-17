@@ -1,9 +1,11 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useApiClientStore } from "../store";
 import { KeyValueGrid } from "./KeyValueGrid";
 import { AuthEditor } from "./AuthEditor";
 import { BodyEditor } from "./BodyEditor";
 import { UrlBar } from "./UrlBar";
+import type { CurlParseResult } from "../types";
+import { curlResultToRequestUpdate } from "../curl";
 
 interface Props {
   onSend: () => void;
@@ -25,6 +27,13 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const isDraft = activeRequest !== null && activeRequestPath === null;
+
+  const handleCurlPaste = useCallback(
+    (result: CurlParseResult) => {
+      updateRequest(curlResultToRequestUpdate(result));
+    },
+    [updateRequest],
+  );
 
   useEffect(() => {
     if (isDraft && urlInputRef.current) {
@@ -134,6 +143,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
         onSend={onSend}
         onCancel={onCancel}
         onSave={onSave}
+        onCurlPaste={handleCurlPaste}
         urlInputRef={urlInputRef}
       />
 

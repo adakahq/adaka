@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
 import { useApiClientStore } from "./store";
@@ -6,15 +6,20 @@ import { CollectionTree } from "./components/CollectionTree";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { EnvSwitcher } from "./components/EnvSwitcher";
+import type { EnvSwitcherHandle } from "./components/EnvSwitcher";
 import { EnvEditor } from "./components/EnvEditor";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
-import type { TreeNode, SendResponse, StructuredError, RequestFile, HistoryListEntry } from "./types";
+import { ImportReportPanel } from "./components/ImportReportPanel";
+import type { TreeNode, SendResponse, StructuredError, RequestFile, HistoryListEntry, ImportReport } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
   const [editingEnv, setEditingEnv] = useState<string | null>(null);
   const [envEditorDirty, setEnvEditorDirty] = useState(false);
   const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [importing, setImporting] = useState(false);
+  const envSwitcherRef = useRef<EnvSwitcherHandle>(null);
 
   const guardEnvEditor = useCallback(
     (proceed: () => void) => {
@@ -182,6 +187,65 @@ export function ApiClientRoute() {
     setSending(false);
   }, [ctx, setSending]);
 
+  const doImportPostman = useCallback(async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const filePath = await open({
+        title: "Import Postman Collection",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!filePath) return;
+      setImporting(true);
+      const report = await ctx.invoke<ImportReport>("api_import_postman", {
+        workspacePath: ctx.workspace.root,
+        filePath: filePath as string,
+        targetFolder: "",
+      });
+      setImportReport(report);
+      setImporting(false);
+      await loadTree();
+      envSwitcherRef.current?.reload();
+      if (report.generated_env) {
+        envSwitcherRef.current?.activate(report.generated_env);
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""} — switched to '${report.generated_env}' environment`);
+      } else {
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`);
+      }
+    } catch (e) {
+      setImporting(false);
+      ctx.ui.toast(`Import failed: ${formatError(e)}`, "error");
+    }
+  }, [ctx, loadTree]);
+
+  const doCopyAsCurl = useCallback(async () => {
+    const reqPath = useApiClientStore.getState().activeRequestPath;
+    if (!reqPath) return;
+    const envName = ctx.env.active() || null;
+    try {
+      const curl = await ctx.invoke<string>("api_export_curl", {
+        workspacePath: ctx.workspace.root,
+        requestPath: reqPath,
+        envName,
+      });
+      await navigator.clipboard.writeText(curl);
+      ctx.ui.toast("Copied as cURL");
+    } catch (e) {
+      ctx.ui.toast(`Copy failed: ${formatError(e)}`, "error");
+    }
+  }, [ctx]);
+
+  // Palette event listeners for import/copy
+  useEffect(() => {
+    const onImport = () => void doImportPostman();
+    const onCopyCurl = () => void doCopyAsCurl();
+    window.addEventListener("adaka:import-postman", onImport);
+    window.addEventListener("adaka:copy-as-curl", onCopyCurl);
+    return () => {
+      window.removeEventListener("adaka:import-postman", onImport);
+      window.removeEventListener("adaka:copy-as-curl", onCopyCurl);
+    };
+  }, [doImportPostman, doCopyAsCurl]);
+
   // Keyboard shortcuts
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -218,7 +282,7 @@ export function ApiClientRoute() {
       <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-1.5">
         <span className="text-xs font-medium text-adaka-muted">API Client</span>
         <div className="ml-auto">
-          <EnvSwitcher onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
+          <EnvSwitcher ref={envSwitcherRef} onEditEnv={(name) => guardEnvEditor(() => setEditingEnv(name))} />
         </div>
       </div>
       {!baseUrlDismissed && (
@@ -228,6 +292,9 @@ export function ApiClientRoute() {
         <CollectionTree
           onSelect={loadRequest}
           onTreeChanged={loadTree}
+          onImport={doImportPostman}
+          onCopyAsCurl={doCopyAsCurl}
+          importing={importing}
         />
         <div className="flex flex-1 flex-col overflow-hidden border-l border-adaka-border">
           <RequestEditor
@@ -237,7 +304,16 @@ export function ApiClientRoute() {
           />
         </div>
         <div className="flex w-[40%] min-w-[300px] flex-col overflow-hidden border-l border-adaka-border">
-          {editingEnv ? (
+          {importReport ? (
+            <ImportReportPanel
+              report={importReport}
+              onDismiss={() => setImportReport(null)}
+              onOpenEnvEditor={(envName) => {
+                setImportReport(null);
+                guardEnvEditor(() => setEditingEnv(envName));
+              }}
+            />
+          ) : editingEnv ? (
             <EnvEditor
               envName={editingEnv}
               onClose={() => guardEnvEditor(() => setEditingEnv(null))}

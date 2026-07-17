@@ -1,4 +1,5 @@
-import type { HttpMethod } from "../types";
+import type { HttpMethod, CurlParseResult } from "../types";
+import { isCurlCommand } from "../curl";
 
 const METHODS: HttpMethod[] = [
   "GET",
@@ -20,6 +21,7 @@ interface Props {
   onSend: () => void;
   onCancel: () => void;
   onSave: () => void;
+  onCurlPaste?: (result: CurlParseResult) => void;
   urlInputRef?: React.Ref<HTMLInputElement>;
 }
 
@@ -33,8 +35,23 @@ export function UrlBar({
   onSend,
   onCancel,
   onSave,
+  onCurlPaste,
   urlInputRef,
 }: Props) {
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text").trim();
+    if (isCurlCommand(text) && onCurlPaste) {
+      e.preventDefault();
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke<CurlParseResult>("api_parse_curl", { input: text }).then(
+          (result) => onCurlPaste(result),
+          () => {
+            onUrlChange(text);
+          },
+        );
+      });
+    }
+  };
   return (
     <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-2">
       <select
@@ -58,6 +75,7 @@ export function UrlBar({
           placeholder="https://api.example.com/{{version}}/users"
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}
+          onPaste={handlePaste}
         />
         {dirty && (
           <span
