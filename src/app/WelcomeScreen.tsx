@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { openWorkspace, createWorkspace, quickCreateWorkspace, getDefaultWorkspaceDir } from "./workspace-actions";
 import { getRecents, removeRecent, type RecentWorkspace } from "../shared/recents";
 import { formatKey } from "../shared/shortcuts";
-import { useShellStore } from "./store";
+import { useGlobalStore } from "./global-store";
+import { useWorkspaceTabsStore } from "./workspace-tabs-store";
 
 const UNSAFE_CHARS = /[/\\:*?"<>|]/;
 
@@ -16,10 +17,14 @@ export function validateName(name: string): string | null {
   return null;
 }
 
-export function WelcomeScreen() {
+/** Renders as the content of a "welcome" workspace tab (§2.1's
+ * "welcome-in-a-tab") — picking or creating a workspace here converts
+ * `tabId`'s own tab into that workspace, it never spawns a new one. */
+export function WelcomeScreen({ tabId }: { tabId: string }) {
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
-  const shellShowQuickCreate = useShellStore((s) => s.showQuickCreate);
-  const setShellShowQuickCreate = useShellStore((s) => s.setShowQuickCreate);
+  const shellShowQuickCreate = useGlobalStore((s) => s.showQuickCreate);
+  const setShellShowQuickCreate = useGlobalStore((s) => s.setShowQuickCreate);
+  const isActiveTab = useWorkspaceTabsStore((s) => s.activeTabId === tabId);
   const [showCreate, setShowCreate] = useState(false);
   const [wsName, setWsName] = useState("");
   const [defaultDir, setDefaultDir] = useState<string | null>(null);
@@ -31,11 +36,15 @@ export function WelcomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (shellShowQuickCreate) {
+    // Several welcome tabs can be open at once (e.g. two "+" clicks before
+    // either is resolved) — only the active one should react to the
+    // palette's "Create workspace" command, or all of them would pop into
+    // create-mode together.
+    if (shellShowQuickCreate && isActiveTab) {
       setShowCreate(true);
       setShellShowQuickCreate(false);
     }
-  }, [shellShowQuickCreate, setShellShowQuickCreate]);
+  }, [shellShowQuickCreate, isActiveTab, setShellShowQuickCreate]);
 
   useEffect(() => {
     if (showCreate) {
@@ -57,9 +66,9 @@ export function WelcomeScreen() {
 
   const handleOpen = useCallback(
     (path: string) => {
-      void openWorkspace(path);
+      void openWorkspace(tabId, path);
     },
-    [],
+    [tabId],
   );
 
   const nameError = wsName.trim() ? validateName(wsName) : null;
@@ -68,9 +77,9 @@ export function WelcomeScreen() {
     const err = validateName(wsName);
     if (err) return;
     setCreating(true);
-    await quickCreateWorkspace(wsName.trim());
+    await quickCreateWorkspace(tabId, wsName.trim());
     setCreating(false);
-  }, [wsName]);
+  }, [tabId, wsName]);
 
   return (
     <div className="flex h-full w-full flex-col text-adaka-muted">
@@ -100,7 +109,7 @@ export function WelcomeScreen() {
                 <div className="flex gap-3">
                   <button
                     className="rounded bg-adaka-gold px-4 py-2 text-sm font-medium text-adaka-on-gold hover:brightness-110"
-                    onClick={() => void openWorkspace()}
+                    onClick={() => void openWorkspace(tabId)}
                   >
                     Open workspace
                   </button>
@@ -151,7 +160,7 @@ export function WelcomeScreen() {
                     onClick={() => {
                       setShowCreate(false);
                       setWsName("");
-                      void createWorkspace();
+                      void createWorkspace(tabId);
                     }}
                   >
                     Choose a custom location…

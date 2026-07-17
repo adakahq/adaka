@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useModuleContext } from "../../../shared/module-sdk";
-import { useApiClientStore } from "../store";
+import { useApiClientStore, useApiClientStoreApi } from "../store";
 import type { TreeNode } from "../types";
 import { METHOD_COLORS } from "../types";
 import { formatError } from "../../../shared/formatError";
@@ -15,6 +15,7 @@ interface Props {
 
 export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl, importing }: Props) {
   const ctx = useModuleContext();
+  const api = useApiClientStoreApi();
   const tree = useApiClientStore((s) => s.tree);
   const activeRequestPath = useApiClientStore((s) => s.activeRequestPath);
   const setActiveRequestPath = useApiClientStore(
@@ -137,7 +138,7 @@ export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl
                 relative: node.path,
               });
               if (activeRequestPath === node.path) {
-                useApiClientStore.getState().setActiveRequest(null);
+                api.getState().setActiveRequest(null);
                 setActiveRequestPath(null);
               }
             } else {
@@ -151,7 +152,7 @@ export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl
         },
       });
     },
-    [ctx, activeRequestPath, setActiveRequestPath, onTreeChanged],
+    [ctx, api, activeRequestPath, setActiveRequestPath, onTreeChanged],
   );
 
   const deleteTreeRecursive = async (node: TreeNode) => {

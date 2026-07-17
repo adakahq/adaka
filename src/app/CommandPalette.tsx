@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModules, type ModuleContext, type PaletteCommand } from "../shared/module-sdk";
-import { useShellStore } from "./store";
-import { openWorkspace, closeWorkspace } from "./workspace-actions";
+import { useGlobalStore } from "./global-store";
+import { useWorkspaceTabsStore, type WorkspaceTab } from "./workspace-tabs-store";
+import { openWorkspace, closeWorkspaceTab } from "./workspace-actions";
 
 interface ResolvedCommand {
   cmd: PaletteCommand;
@@ -46,15 +47,33 @@ function highlightFuzzy(query: string, text: string): React.ReactNode {
   return parts;
 }
 
-function builtinCommands(): ResolvedCommand[] {
-  const store = useShellStore.getState();
+/** Opens/focuses a welcome tab and starts the open-workspace flow in it —
+ * reuses the active tab if it's already a welcome tab instead of always
+ * spawning a new one. */
+function openWorkspaceViaPalette() {
+  const { tabs, activeTabId, addWelcomeTab, setActiveTab } = useWorkspaceTabsStore.getState();
+  const active = tabs.find((t) => t.id === activeTabId);
+  const tabId = active?.kind === "welcome" ? active.id : addWelcomeTab();
+  setActiveTab(tabId);
+  void openWorkspace(tabId);
+}
+
+function createWorkspaceViaPalette() {
+  const { tabs, activeTabId, addWelcomeTab, setActiveTab } = useWorkspaceTabsStore.getState();
+  const active = tabs.find((t) => t.id === activeTabId);
+  const tabId = active?.kind === "welcome" ? active.id : addWelcomeTab();
+  setActiveTab(tabId);
+  useGlobalStore.getState().setShowQuickCreate(true);
+}
+
+function builtinCommands(activeTab: WorkspaceTab | undefined): ResolvedCommand[] {
   const cmds: ResolvedCommand[] = [
     {
       cmd: {
         id: "builtin:open-workspace",
         label: "Open workspace",
         keywords: ["folder", "project"],
-        action: () => void openWorkspace(),
+        action: openWorkspaceViaPalette,
       },
       ctx: null,
       moduleId: null,
@@ -64,12 +83,7 @@ function builtinCommands(): ResolvedCommand[] {
         id: "builtin:create-workspace",
         label: "Create workspace",
         keywords: ["new", "init"],
-        action: () => {
-          if (store.workspace) {
-            closeWorkspace();
-          }
-          store.setShowQuickCreate(true);
-        },
+        action: createWorkspaceViaPalette,
       },
       ctx: null,
       moduleId: null,
@@ -77,52 +91,56 @@ function builtinCommands(): ResolvedCommand[] {
     // TODO(light-theme): restore theme toggle command
   ];
 
-  for (const tab of store.tabs) {
-    cmds.push({
-      cmd: {
-        id: `builtin:tab:${tab.id}`,
-        label: `Switch to: ${tab.label}`,
-        keywords: ["tab", "switch"],
-        action: () => store.setActiveTab(tab.id),
-      },
-      ctx: null,
-      moduleId: null,
-    });
+  if (activeTab?.kind === "workspace" && activeTab.session) {
+    const { tabs: itemTabs, setActiveTab: setActiveItemTab } = activeTab.session.shellStore.getState();
+    for (const tab of itemTabs) {
+      cmds.push({
+        cmd: {
+          id: `builtin:tab:${tab.id}`,
+          label: `Switch to: ${tab.label}`,
+          keywords: ["tab", "switch"],
+          action: () => setActiveItemTab(tab.id),
+        },
+        ctx: null,
+        moduleId: null,
+      });
+    }
   }
 
   return cmds;
 }
 
 export function CommandPalette() {
-  const open = useShellStore((s) => s.paletteOpen);
-  const setPaletteOpen = useShellStore((s) => s.setPaletteOpen);
+  const open = useGlobalStore((s) => s.paletteOpen);
+  const setPaletteOpen = useGlobalStore((s) => s.setPaletteOpen);
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const moduleContexts = useShellStore((s) => s.moduleContexts);
-  const workspace = useShellStore((s) => s.workspace);
+  const activeTab = useWorkspaceTabsStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const isWorkspaceActive = activeTab?.kind === "workspace";
 
   const allCommands = useMemo(() => {
     if (!open) return [];
-    const builtins = builtinCommands();
-    if (!workspace) return builtins;
+    const builtins = builtinCommands(activeTab);
+    if (!isWorkspaceActive || !activeTab?.session) return builtins;
     builtins.push({
       cmd: {
         id: "builtin:close-workspace",
         label: "Close workspace",
         keywords: ["exit", "leave"],
-        action: () => closeWorkspace(),
+        action: () => closeWorkspaceTab(activeTab.id),
       },
       ctx: null,
       moduleId: null,
     });
+    const moduleContexts = activeTab.session.shellStore.getState().moduleContexts;
     const moduleResolved: ResolvedCommand[] = getModules().flatMap((m) => {
       const ctx = moduleContexts.get(m.id) ?? null;
       return m.commands.map((cmd) => ({ cmd, ctx, moduleId: m.id }));
     });
     return [...builtins, ...moduleResolved];
-  }, [open, moduleContexts, workspace]);
+  }, [open, activeTab, isWorkspaceActive]);
 
   const filtered = useMemo(() => {
     if (!query) return allCommands;
@@ -145,12 +163,12 @@ export function CommandPalette() {
     }
   }, [open]);
 
-  const addToast = useShellStore((s) => s.addToast);
+  const addToast = useGlobalStore((s) => s.addToast);
 
   const run = useCallback(
     (rc: ResolvedCommand) => {
       setPaletteOpen(false);
-      if (rc.moduleId && !workspace) {
+      if (rc.moduleId && !isWorkspaceActive) {
         addToast("Open a workspace first", "error");
         return;
       }
@@ -160,7 +178,7 @@ export function CommandPalette() {
         rc.cmd.action(null as unknown as ModuleContext);
       }
     },
-    [setPaletteOpen, workspace, addToast],
+    [setPaletteOpen, isWorkspaceActive, addToast],
   );
 
   const onKeyDown = useCallback(

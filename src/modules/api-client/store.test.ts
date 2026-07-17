@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach } from "vitest";
-import { useApiClientStore } from "./store";
+import { describe, expect, test } from "vitest";
+import { createApiClientStore } from "./store";
 import type { RequestFile } from "./types";
 
 function blankRequest(overrides?: Partial<RequestFile>): RequestFile {
@@ -20,61 +20,52 @@ function blankRequest(overrides?: Partial<RequestFile>): RequestFile {
   };
 }
 
-describe("useApiClientStore", () => {
-  beforeEach(() => {
-    useApiClientStore.setState({
-      activeRequest: null,
-      activeRequestPath: null,
-      dirty: false,
-      sending: false,
-      response: null,
-      error: null,
-    });
-  });
-
+describe("createApiClientStore", () => {
   test("updateRequest changes method and marks dirty", () => {
-    const store = useApiClientStore.getState();
-    store.setActiveRequest(blankRequest());
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest());
 
-    expect(useApiClientStore.getState().activeRequest?.method).toBe("GET");
-    expect(useApiClientStore.getState().dirty).toBe(false);
+    expect(store.getState().activeRequest?.method).toBe("GET");
+    expect(store.getState().dirty).toBe(false);
 
-    useApiClientStore.getState().updateRequest({ method: "POST" });
+    store.getState().updateRequest({ method: "POST" });
 
-    expect(useApiClientStore.getState().activeRequest?.method).toBe("POST");
-    expect(useApiClientStore.getState().dirty).toBe(true);
+    expect(store.getState().activeRequest?.method).toBe("POST");
+    expect(store.getState().dirty).toBe(true);
   });
 
   test("method persists through simulated save cycle", () => {
-    useApiClientStore.getState().setActiveRequest(blankRequest());
-    useApiClientStore.getState().updateRequest({ method: "DELETE" });
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest());
+    store.getState().updateRequest({ method: "DELETE" });
 
-    expect(useApiClientStore.getState().activeRequest?.method).toBe("DELETE");
+    expect(store.getState().activeRequest?.method).toBe("DELETE");
 
     // Simulate save: dirty clears but method stays
-    useApiClientStore.getState().setDirty(false);
-    expect(useApiClientStore.getState().activeRequest?.method).toBe("DELETE");
-    expect(useApiClientStore.getState().dirty).toBe(false);
+    store.getState().setDirty(false);
+    expect(store.getState().activeRequest?.method).toBe("DELETE");
+    expect(store.getState().dirty).toBe(false);
   });
 
   test("method persists through simulated reload", () => {
-    useApiClientStore.getState().setActiveRequest(blankRequest());
-    useApiClientStore.getState().updateRequest({ method: "PUT" });
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest());
+    store.getState().updateRequest({ method: "PUT" });
 
     // Simulate reload: setActiveRequest with the saved method
-    const saved = useApiClientStore.getState().activeRequest;
+    const saved = store.getState().activeRequest;
     if (!saved) throw new Error("expected activeRequest");
-    useApiClientStore.getState().setActiveRequest({ ...saved });
+    store.getState().setActiveRequest({ ...saved });
 
-    expect(useApiClientStore.getState().activeRequest?.method).toBe("PUT");
-    expect(useApiClientStore.getState().dirty).toBe(false);
+    expect(store.getState().activeRequest?.method).toBe("PUT");
+    expect(store.getState().dirty).toBe(false);
   });
 
   test("createDraft sets untitled request with dirty flag", () => {
-    useApiClientStore.getState().createDraft();
+    const store = createApiClientStore();
+    store.getState().createDraft();
 
-    const { activeRequest, activeRequestPath, dirty } =
-      useApiClientStore.getState();
+    const { activeRequest, activeRequestPath, dirty } = store.getState();
     expect(activeRequest).not.toBeNull();
     expect(activeRequest?.name).toBe("Untitled request");
     expect(activeRequest?.method).toBe("GET");
@@ -83,48 +74,52 @@ describe("useApiClientStore", () => {
   });
 
   test("updateRequest is no-op when activeRequest is null", () => {
-    useApiClientStore.getState().updateRequest({ method: "PATCH" });
-    expect(useApiClientStore.getState().activeRequest).toBeNull();
-    expect(useApiClientStore.getState().dirty).toBe(false);
+    const store = createApiClientStore();
+    store.getState().updateRequest({ method: "PATCH" });
+    expect(store.getState().activeRequest).toBeNull();
+    expect(store.getState().dirty).toBe(false);
   });
 
   test("dirty existing request: save clears dirty, path remains for send", () => {
-    useApiClientStore.getState().setActiveRequest(blankRequest({ url: "http://old" }));
-    useApiClientStore.getState().setActiveRequestPath("requests/my-req.req.toml");
-    useApiClientStore.getState().setDirty(false);
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest({ url: "http://old" }));
+    store.getState().setActiveRequestPath("requests/my-req.req.toml");
+    store.getState().setDirty(false);
 
-    useApiClientStore.getState().updateRequest({ url: "http://new" });
-    expect(useApiClientStore.getState().dirty).toBe(true);
-    expect(useApiClientStore.getState().activeRequest?.url).toBe("http://new");
+    store.getState().updateRequest({ url: "http://new" });
+    expect(store.getState().dirty).toBe(true);
+    expect(store.getState().activeRequest?.url).toBe("http://new");
 
     // Simulate save: dirty clears, path and url stay
-    useApiClientStore.getState().setDirty(false);
-    const state = useApiClientStore.getState();
+    store.getState().setDirty(false);
+    const state = store.getState();
     expect(state.dirty).toBe(false);
     expect(state.activeRequestPath).toBe("requests/my-req.req.toml");
     expect(state.activeRequest?.url).toBe("http://new");
   });
 
   test("draft save assigns path so send can proceed", () => {
-    useApiClientStore.getState().createDraft();
-    expect(useApiClientStore.getState().activeRequestPath).toBeNull();
-    expect(useApiClientStore.getState().dirty).toBe(true);
+    const store = createApiClientStore();
+    store.getState().createDraft();
+    expect(store.getState().activeRequestPath).toBeNull();
+    expect(store.getState().dirty).toBe(true);
 
-    useApiClientStore.getState().updateRequest({ url: "http://draft-url" });
+    store.getState().updateRequest({ url: "http://draft-url" });
 
     // Simulate save assigning a path
-    useApiClientStore.getState().setActiveRequestPath("requests/untitled-request.req.toml");
-    useApiClientStore.getState().setDirty(false);
+    store.getState().setActiveRequestPath("requests/untitled-request.req.toml");
+    store.getState().setDirty(false);
 
-    const state = useApiClientStore.getState();
+    const state = store.getState();
     expect(state.activeRequestPath).toBe("requests/untitled-request.req.toml");
     expect(state.activeRequest?.url).toBe("http://draft-url");
     expect(state.dirty).toBe(false);
   });
 
   test("createDraft DTO has no null members", () => {
-    useApiClientStore.getState().createDraft();
-    const req = useApiClientStore.getState().activeRequest;
+    const store = createApiClientStore();
+    store.getState().createDraft();
+    const req = store.getState().activeRequest;
     if (!req) throw new Error("expected activeRequest");
 
     // Top-level required fields must be strings, not null
@@ -155,11 +150,30 @@ describe("useApiClientStore", () => {
   });
 
   test("serialized TOML contains current URL, not stale value", () => {
-    useApiClientStore.getState().setActiveRequest(blankRequest({ url: "http://old" }));
-    useApiClientStore.getState().updateRequest({ url: "http://{{NOPE}}/api" });
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest({ url: "http://old" }));
+    store.getState().updateRequest({ url: "http://{{NOPE}}/api" });
 
-    const req = useApiClientStore.getState().activeRequest;
+    const req = store.getState().activeRequest;
     if (!req) throw new Error("expected activeRequest");
     expect(req.url).toBe("http://{{NOPE}}/api");
+  });
+
+  test("two workspace stores coexist without bleeding", () => {
+    const storeA = createApiClientStore();
+    const storeB = createApiClientStore();
+
+    storeA.getState().createDraft();
+    storeA.getState().updateRequest({ url: "http://workspace-a" });
+
+    expect(storeB.getState().activeRequest).toBeNull();
+    expect(storeB.getState().dirty).toBe(false);
+
+    storeB.getState().createDraft();
+    storeB.getState().updateRequest({ url: "http://workspace-b" });
+
+    expect(storeA.getState().activeRequest?.url).toBe("http://workspace-a");
+    expect(storeB.getState().activeRequest?.url).toBe("http://workspace-b");
+    expect(storeA.getState().activeRequest).not.toBe(storeB.getState().activeRequest);
   });
 });

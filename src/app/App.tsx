@@ -1,6 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useShellStore } from "./store";
+import { useGlobalStore, type Theme } from "./global-store";
+import { useWorkspaceTabsStore, type WorkspaceTab } from "./workspace-tabs-store";
+import { hydrateWorkspaceTabs } from "./workspace-actions";
+import { WorkspaceTabProvider } from "./workspace-tab-context";
+import { WorkspaceTabStrip } from "./WorkspaceTabStrip";
 import { TitleBar } from "./TitleBar";
 import { ModuleRail } from "./ModuleRail";
 import { ContextPanel } from "./ContextPanel";
@@ -13,7 +17,6 @@ import { Toasts } from "./Toasts";
 import { ConfirmPanel } from "./ConfirmPanel";
 import { ShortcutOverlay } from "./ShortcutOverlay";
 import { getPref, setPref } from "../shared/prefs";
-import type { Theme } from "./store";
 
 import "../modules/api-client";
 import "../modules/utilities";
@@ -24,8 +27,8 @@ const queryClient = new QueryClient({
 
 // TODO: light theme is a later milestone. Both values render dark for now.
 function ThemeSync() {
-  const theme = useShellStore((s) => s.theme);
-  const setTheme = useShellStore((s) => s.setTheme);
+  const theme = useGlobalStore((s) => s.theme);
+  const setTheme = useGlobalStore((s) => s.setTheme);
 
   useEffect(() => {
     void getPref<Theme>("theme").then((t) => {
@@ -47,10 +50,11 @@ function ThemeSync() {
 }
 
 function KeyboardShortcuts() {
-  const setPaletteOpen = useShellStore((s) => s.setPaletteOpen);
-  const paletteOpen = useShellStore((s) => s.paletteOpen);
-  const setShortcutsOpen = useShellStore((s) => s.setShortcutsOpen);
-  const shortcutsOpen = useShellStore((s) => s.shortcutsOpen);
+  const setPaletteOpen = useGlobalStore((s) => s.setPaletteOpen);
+  const paletteOpen = useGlobalStore((s) => s.paletteOpen);
+  const setShortcutsOpen = useGlobalStore((s) => s.setShortcutsOpen);
+  const shortcutsOpen = useGlobalStore((s) => s.shortcutsOpen);
+  const addWelcomeTab = useWorkspaceTabsStore((s) => s.addWelcomeTab);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -62,32 +66,22 @@ function KeyboardShortcuts() {
         e.preventDefault();
         setShortcutsOpen(!shortcutsOpen);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
+        e.preventDefault();
+        addWelcomeTab();
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paletteOpen, setPaletteOpen, shortcutsOpen, setShortcutsOpen]);
+  }, [paletteOpen, setPaletteOpen, shortcutsOpen, setShortcutsOpen, addWelcomeTab]);
 
   return null;
 }
 
-function Shell() {
-  const workspace = useShellStore((s) => s.workspace);
-
-  if (!workspace) {
-    return (
-      <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
-        <TitleBar />
-        <div className="flex flex-1 overflow-hidden">
-          <WelcomeScreen />
-        </div>
-        <CommandPalette />
-        <ConfirmPanel />
-        <ShortcutOverlay />
-        <Toasts />
-      </div>
-    );
+function WorkspaceTabContent({ tab }: { tab: WorkspaceTab }) {
+  if (tab.kind === "welcome") {
+    return <WelcomeScreen tabId={tab.id} />;
   }
-
   return (
     <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
       <TitleBar />
@@ -100,6 +94,39 @@ function Shell() {
         </div>
       </div>
       <StatusBar />
+    </div>
+  );
+}
+
+function Shell() {
+  const tabs = useWorkspaceTabsStore((s) => s.tabs);
+  const activeTabId = useWorkspaceTabsStore((s) => s.activeTabId);
+  const hydrated = useRef(false);
+
+  useEffect(() => {
+    if (hydrated.current) return;
+    hydrated.current = true;
+    void hydrateWorkspaceTabs();
+  }, []);
+
+  return (
+    <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
+      <WorkspaceTabStrip />
+      {/* Every open workspace tab stays mounted (hidden via CSS, not
+          unmounted) so switching is instant and nothing reloads — in-flight
+          sends, drafts, and scroll position all survive backgrounding. */}
+      <div className="relative flex flex-1 overflow-hidden">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={tab.id === activeTabId ? "flex h-full w-full flex-col" : "hidden"}
+          >
+            <WorkspaceTabProvider value={{ tabId: tab.id, session: tab.session }}>
+              <WorkspaceTabContent tab={tab} />
+            </WorkspaceTabProvider>
+          </div>
+        ))}
+      </div>
       <CommandPalette />
       <ConfirmPanel />
       <ShortcutOverlay />

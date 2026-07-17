@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
-import { useApiClientStore } from "./store";
+import { useApiClientStore, useApiClientStoreApi } from "./store";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
@@ -10,6 +10,7 @@ import type { SendResponse, StructuredError, HistoryListEntry } from "./types";
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
+  const api = useApiClientStoreApi();
   const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
   const importReport = useApiClientStore((s) => s.importReport);
   const setImportReport = useApiClientStore((s) => s.setImportReport);
@@ -22,7 +23,7 @@ export function ApiClientRoute() {
     setError,
     dirty,
     activeRequest,
-  } = useApiClientStore();
+  } = useApiClientStore((s) => s);
 
   const loadHistory = useCallback(
     async (path: string) => {
@@ -31,12 +32,12 @@ export function ApiClientRoute() {
           workspacePath: ctx.workspace.root,
           requestPath: path,
         });
-        useApiClientStore.getState().setHistoryEntries(entries);
+        api.getState().setHistoryEntries(entries);
       } catch {
-        useApiClientStore.getState().setHistoryEntries([]);
+        api.getState().setHistoryEntries([]);
       }
     },
-    [ctx],
+    [ctx, api],
   );
 
   const saveRequest = useCallback(async () => {
@@ -56,13 +57,13 @@ export function ApiClientRoute() {
         requestPath: path,
         def: activeRequest,
       });
-      useApiClientStore.getState().setActiveRequestPath(path);
-      useApiClientStore.getState().setDirty(false);
+      api.getState().setActiveRequestPath(path);
+      api.getState().setDirty(false);
       ctx.ui.toast("Request saved");
     } catch (e) {
       ctx.ui.toast(`Save failed: ${formatError(e)}`, "error");
     }
-  }, [ctx, activeRequest, activeRequestPath]);
+  }, [ctx, api, activeRequest, activeRequestPath]);
 
   const doSend = useCallback(async () => {
     if (!activeRequest) return;
@@ -71,7 +72,7 @@ export function ApiClientRoute() {
       await saveRequest();
     }
 
-    const reqPath = useApiClientStore.getState().activeRequestPath;
+    const reqPath = api.getState().activeRequestPath;
     if (!reqPath) return;
 
     const envName = ctx.env.active() || null;
@@ -86,7 +87,7 @@ export function ApiClientRoute() {
         envName,
       });
       setResponse(resp);
-      useApiClientStore.getState().setViewingHistory(null);
+      api.getState().setViewingHistory(null);
       setSending(false);
       void loadHistory(reqPath);
     } catch (e: unknown) {
@@ -94,7 +95,7 @@ export function ApiClientRoute() {
       setError(err);
       setSending(false);
     }
-  }, [ctx, activeRequest, dirty, saveRequest, setSending, setError, setResponse, loadHistory]);
+  }, [ctx, api, activeRequest, dirty, saveRequest, setSending, setError, setResponse, loadHistory]);
 
   const sendRequest = useCallback(() => {
     if (!activeRequest) return;
@@ -102,7 +103,7 @@ export function ApiClientRoute() {
   }, [activeRequest, doSend]);
 
   const cancelRequest = useCallback(async () => {
-    const { activeRequestId } = useApiClientStore.getState();
+    const { activeRequestId } = api.getState();
     if (activeRequestId) {
       try {
         await ctx.invoke("api_cancel_request", { requestId: activeRequestId });
@@ -111,7 +112,7 @@ export function ApiClientRoute() {
       }
     }
     setSending(false);
-  }, [ctx, setSending]);
+  }, [ctx, api, setSending]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -130,19 +131,19 @@ export function ApiClientRoute() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "h") {
         e.preventDefault();
-        useApiClientStore.getState().setResponseTab("history");
+        api.getState().setResponseTab("history");
       }
       if (e.key === "Escape") {
-        const { viewingHistory } = useApiClientStore.getState();
+        const { viewingHistory } = api.getState();
         if (viewingHistory) {
           e.preventDefault();
-          useApiClientStore.getState().setViewingHistory(null);
+          api.getState().setViewingHistory(null);
         }
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sending, sendRequest, cancelRequest, saveRequest, dirty]);
+  }, [sending, sendRequest, cancelRequest, saveRequest, dirty, api]);
 
   return (
     <div className="flex h-full flex-col">

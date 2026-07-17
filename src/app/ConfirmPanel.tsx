@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { useShellStore } from "./store";
+import { useGlobalStore } from "./global-store";
 
 export function ConfirmPanel() {
-  const confirm = useShellStore((s) => s.confirm);
-  const dismiss = useShellStore((s) => s.dismissConfirm);
+  const confirm = useGlobalStore((s) => s.confirm);
+  const dismiss = useGlobalStore((s) => s.dismissConfirm);
 
   useEffect(() => {
     if (!confirm) return;

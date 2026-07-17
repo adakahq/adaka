@@ -1,5 +1,5 @@
 import type { ModuleRouteProps } from "../../../shared/module-sdk";
-import { useApiClientStore } from "../store";
+import { useApiClientStoreApi } from "../store";
 import { EnvEditor } from "./EnvEditor";
 
 /**
@@ -9,10 +9,11 @@ import { EnvEditor } from "./EnvEditor";
  */
 export function EnvEditorRoute({ routeParam }: ModuleRouteProps) {
   const envName = routeParam ?? "local";
+  const api = useApiClientStoreApi();
   return (
     <EnvEditor
       envName={envName}
-      onDirtyChange={(dirty) => useApiClientStore.getState().setEnvDirty(envName, dirty)}
+      onDirtyChange={(dirty) => api.getState().setEnvDirty(envName, dirty)}
     />
   );
 }

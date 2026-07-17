@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { useShellStore } from "./store";
+import { useGlobalStore } from "./global-store";
 import { SHORTCUTS, formatKey } from "../shared/shortcuts";
 
 export function ShortcutOverlay() {
-  const open = useShellStore((s) => s.shortcutsOpen);
-  const setOpen = useShellStore((s) => s.setShortcutsOpen);
+  const open = useGlobalStore((s) => s.shortcutsOpen);
+  const setOpen = useGlobalStore((s) => s.setShortcutsOpen);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

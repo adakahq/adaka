@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import type { ModuleContext, ToastKind, WorkspaceInfo } from "../shared/module-sdk";
-
-export type Theme = "dark" | "light";
+import { create, useStore, type StoreApi, type UseBoundStore } from "zustand";
+import type { ModuleContext, WorkspaceInfo } from "../shared/module-sdk";
+import { useWorkspaceTab } from "./workspace-tab-context";
 
 export interface Tab {
   id: string;
@@ -10,112 +9,100 @@ export interface Tab {
   routePath: string;
 }
 
-export interface Toast {
-  id: number;
-  msg: string;
-  kind: ToastKind;
-}
-
-export interface ConfirmPanel {
-  title: string;
-  detail: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  destructive?: boolean;
-}
-
-let toastSeq = 0;
-
-interface ShellState {
-  workspace: WorkspaceInfo | null;
-  theme: Theme;
+/**
+ * Everything that belongs to ONE open workspace tab. Every field here used
+ * to live in a single global singleton (`useShellStore`); now one instance
+ * of this store is created per workspace tab (see `createShellStore` /
+ * `workspace-tabs-store.ts`), so two open workspaces never share item tabs,
+ * env selection, or module contexts. Chrome that has no per-workspace
+ * meaning (theme, toasts, confirm, palette) lives in `./global-store.ts`
+ * instead.
+ */
+export interface WorkspaceShellState {
+  workspace: WorkspaceInfo;
   activeEnv: string;
   tabs: Tab[];
   activeTabId: string | null;
-  paletteOpen: boolean;
-  shortcutsOpen: boolean;
-  toasts: Toast[];
   moduleContexts: Map<string, ModuleContext>;
-  confirm: ConfirmPanel | null;
-  showQuickCreate: boolean;
   railCollapsed: boolean;
   envReloadKey: number;
 
-  setWorkspace: (ws: WorkspaceInfo | null) => void;
-  setTheme: (t: Theme) => void;
   setActiveEnv: (env: string) => void;
   openTab: (tab: Tab) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
-  setPaletteOpen: (open: boolean) => void;
-  setShortcutsOpen: (open: boolean) => void;
-  addToast: (msg: string, kind?: ToastKind) => void;
-  removeToast: (id: number) => void;
   setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
-  showConfirm: (panel: ConfirmPanel) => void;
-  dismissConfirm: () => void;
-  setShowQuickCreate: (show: boolean) => void;
   setRailCollapsed: (collapsed: boolean) => void;
   bumpEnvReload: () => void;
 }
 
-export const useShellStore = create<ShellState>((set, get) => ({
-  workspace: null,
-  theme: "dark",
-  activeEnv: "local",
-  tabs: [],
-  activeTabId: null,
-  paletteOpen: false,
-  shortcutsOpen: false,
-  toasts: [],
-  moduleContexts: new Map(),
-  confirm: null,
-  showQuickCreate: false,
-  railCollapsed: false,
-  envReloadKey: 0,
+export type ShellStoreApi = UseBoundStore<StoreApi<WorkspaceShellState>>;
 
-  setWorkspace: (ws) => set({ workspace: ws }),
-  setTheme: (t) => set({ theme: t }),
-  setActiveEnv: (env) => set({ activeEnv: env }),
+export function createShellStore(workspace: WorkspaceInfo): ShellStoreApi {
+  return create<WorkspaceShellState>((set, get) => ({
+    workspace,
+    activeEnv: "local",
+    tabs: [],
+    activeTabId: null,
+    moduleContexts: new Map(),
+    railCollapsed: false,
+    envReloadKey: 0,
 
-  openTab: (tab) => {
-    const { tabs } = get();
-    const existing = tabs.find((t) => t.id === tab.id);
-    if (existing) {
-      set({ activeTabId: tab.id });
-    } else {
-      set({ tabs: [...tabs, tab], activeTabId: tab.id });
-    }
-  },
+    setActiveEnv: (env) => set({ activeEnv: env }),
 
-  closeTab: (id) => {
-    const { tabs, activeTabId } = get();
-    const idx = tabs.findIndex((t) => t.id === id);
-    const next = tabs.filter((t) => t.id !== id);
-    const newActive =
-      activeTabId === id
-        ? (next[Math.min(idx, next.length - 1)]?.id ?? null)
-        : activeTabId;
-    set({ tabs: next, activeTabId: newActive });
-  },
+    openTab: (tab) => {
+      const { tabs } = get();
+      const existing = tabs.find((t) => t.id === tab.id);
+      if (existing) {
+        set({ activeTabId: tab.id });
+      } else {
+        set({ tabs: [...tabs, tab], activeTabId: tab.id });
+      }
+    },
 
-  setActiveTab: (id) => set({ activeTabId: id }),
-  setPaletteOpen: (open) => set({ paletteOpen: open }),
-  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+    closeTab: (id) => {
+      const { tabs, activeTabId } = get();
+      const idx = tabs.findIndex((t) => t.id === id);
+      const next = tabs.filter((t) => t.id !== id);
+      const newActive =
+        activeTabId === id
+          ? (next[Math.min(idx, next.length - 1)]?.id ?? null)
+          : activeTabId;
+      set({ tabs: next, activeTabId: newActive });
+    },
 
-  addToast: (msg, kind = "info") => {
-    const id = ++toastSeq;
-    set((s) => ({ toasts: [...s.toasts, { id, msg, kind }] }));
-    setTimeout(() => get().removeToast(id), 4000);
-  },
+    setActiveTab: (id) => set({ activeTabId: id }),
+    setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
+    setRailCollapsed: (collapsed) => set({ railCollapsed: collapsed }),
+    bumpEnvReload: () => set((s) => ({ envReloadKey: s.envReloadKey + 1 })),
+  }));
+}
 
-  removeToast: (id) =>
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+/**
+ * Drop-in replacement for the old global `useShellStore((s) => s.x)` call
+ * sites: resolves the CURRENT workspace tab's store (via React context,
+ * see workspace-tab-context.tsx) and subscribes to it. Every shell
+ * component using this must render inside a `<WorkspaceTabProvider>` with a
+ * `"workspace"`-kind tab (welcome tabs have no shell store).
+ */
+export function useShellStore<T>(selector: (s: WorkspaceShellState) => T): T {
+  const { session } = useWorkspaceTab();
+  if (!session) {
+    throw new Error(
+      "useShellStore() called in a workspace tab with no session — " +
+        "welcome tabs don't have shell state.",
+    );
+  }
+  return useStore(session.shellStore, selector);
+}
 
-  setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
-  showConfirm: (panel) => set({ confirm: panel }),
-  dismissConfirm: () => set({ confirm: null }),
-  setShowQuickCreate: (show) => set({ showQuickCreate: show }),
-  setRailCollapsed: (collapsed) => set({ railCollapsed: collapsed }),
-  bumpEnvReload: () => set((s) => ({ envReloadKey: s.envReloadKey + 1 })),
-}));
+/** Same resolution as useShellStore, but returns the raw store object
+ * (with .getState()/.setState()) for use inside event handlers/effects
+ * that can't call selectors imperatively. */
+export function useShellStoreApi(): ShellStoreApi {
+  const { session } = useWorkspaceTab();
+  if (!session) {
+    throw new Error("useShellStoreApi() called in a workspace tab with no session.");
+  }
+  return session.shellStore;
+}

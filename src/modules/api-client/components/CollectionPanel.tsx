@@ -1,23 +1,24 @@
 import { useCallback, useEffect } from "react";
 import { useModuleContext } from "../../../shared/module-sdk";
 import { formatError } from "../../../shared/formatError";
-import { useApiClientStore } from "../store";
+import { useApiClientStore, useApiClientStoreApi } from "../store";
 import { CollectionTree } from "./CollectionTree";
 import type { TreeNode, RequestFile, ImportReport, HistoryListEntry } from "../types";
 
 export function CollectionPanel() {
   const ctx = useModuleContext();
+  const api = useApiClientStoreApi();
 
   const loadTree = useCallback(async () => {
     try {
       const tree = await ctx.invoke<TreeNode[]>("api_list_requests", {
         workspacePath: ctx.workspace.root,
       });
-      useApiClientStore.getState().setTree(tree);
+      api.getState().setTree(tree);
     } catch {
-      useApiClientStore.getState().setTree([]);
+      api.getState().setTree([]);
     }
-  }, [ctx]);
+  }, [ctx, api]);
 
   useEffect(() => {
     void loadTree();
@@ -30,7 +31,7 @@ export function CollectionPanel() {
           workspacePath: ctx.workspace.root,
           requestPath: path,
         });
-        const store = useApiClientStore.getState();
+        const store = api.getState();
         store.setActiveRequest(parsed);
         store.setActiveRequestPath(path);
         store.setResponse(null);
@@ -40,15 +41,15 @@ export function CollectionPanel() {
             workspacePath: ctx.workspace.root,
             requestPath: path,
           });
-          useApiClientStore.getState().setHistoryEntries(entries);
+          api.getState().setHistoryEntries(entries);
         } catch {
-          useApiClientStore.getState().setHistoryEntries([]);
+          api.getState().setHistoryEntries([]);
         }
       } catch (e) {
         ctx.ui.toast(`Could not load request — ${formatError(e)}`, "error");
       }
     },
-    [ctx],
+    [ctx, api],
   );
 
   const doImportPostman = useCallback(async () => {
@@ -59,14 +60,14 @@ export function CollectionPanel() {
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
       if (!filePath) return;
-      useApiClientStore.getState().setImporting(true);
+      api.getState().setImporting(true);
       const report = await ctx.invoke<ImportReport>("api_import_postman", {
         workspacePath: ctx.workspace.root,
         filePath: filePath as string,
         targetFolder: "",
       });
-      useApiClientStore.getState().setImportReport(report);
-      useApiClientStore.getState().setImporting(false);
+      api.getState().setImportReport(report);
+      api.getState().setImporting(false);
       await loadTree();
       if (report.generated_env) {
         ctx.env.setActive(report.generated_env);
@@ -80,13 +81,13 @@ export function CollectionPanel() {
         ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`);
       }
     } catch (e) {
-      useApiClientStore.getState().setImporting(false);
+      api.getState().setImporting(false);
       ctx.ui.toast(`Import failed: ${formatError(e)}`, "error");
     }
-  }, [ctx, loadTree]);
+  }, [ctx, api, loadTree]);
 
   const doCopyAsCurl = useCallback(async () => {
-    const reqPath = useApiClientStore.getState().activeRequestPath;
+    const reqPath = api.getState().activeRequestPath;
     if (!reqPath) return;
     const envName = ctx.env.active() || null;
     try {
@@ -100,7 +101,7 @@ export function CollectionPanel() {
     } catch (e) {
       ctx.ui.toast(`Copy failed: ${formatError(e)}`, "error");
     }
-  }, [ctx]);
+  }, [ctx, api]);
 
   const importing = useApiClientStore((s) => s.importing);
 
