@@ -51,7 +51,7 @@ export function BaseUrlPrompt({ onDismiss }: Props) {
         relative: "environments/local.toml",
         content: updated,
       });
-      ctx.ui.toast("Base URL saved — your requests will use this address");
+      ctx.ui.toast("Base URL saved — your requests will use this address", "success");
       onDismiss();
     } catch (e) {
       ctx.ui.toast(`Failed: ${formatError(e)}`, "error");

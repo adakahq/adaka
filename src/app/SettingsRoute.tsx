@@ -7,6 +7,7 @@ import { useGlobalStore, type Theme } from "./global-store";
 import { useShellStore } from "./store";
 import { SHORTCUTS, formatKey } from "../shared/shortcuts";
 import { Toggle } from "../shared/Toggle";
+import { Tooltip } from "../shared/Tooltip";
 
 type Section = "general" | "appearance" | "shortcuts" | "about";
 
@@ -97,6 +98,8 @@ function AppearanceSection() {
   const railDefault = useSettingsStore((s) => s.railCollapsedDefault);
   const setRailDefault = useSettingsStore((s) => s.setRailCollapsedDefault);
   const setRailCollapsed = useShellStore((s) => s.setRailCollapsed);
+  const splitLayout = useSettingsStore((s) => s.splitLayout);
+  const setSplitLayout = useSettingsStore((s) => s.setSplitLayout);
 
   const pick = (t: Theme) => {
     if (t === "light") return; // coming soon, not wired to anything
@@ -142,6 +145,33 @@ function AppearanceSection() {
           }}
           label="Rail collapsed by default"
         />
+      </Row>
+      <Row
+        title="Request/response layout"
+        detail="How the request editor and response pane are arranged"
+      >
+        <div className="flex gap-1.5">
+          <button
+            className={`rounded border px-2.5 py-1 text-xs ${
+              splitLayout === "stacked"
+                ? "border-adaka-gold text-adaka-gold"
+                : "border-adaka-border-strong text-adaka-text hover:border-adaka-muted"
+            }`}
+            onClick={() => void setSplitLayout("stacked")}
+          >
+            Stacked
+          </button>
+          <button
+            className={`rounded border px-2.5 py-1 text-xs ${
+              splitLayout === "side-by-side"
+                ? "border-adaka-gold text-adaka-gold"
+                : "border-adaka-border-strong text-adaka-text hover:border-adaka-muted"
+            }`}
+            onClick={() => void setSplitLayout("side-by-side")}
+          >
+            Side by side
+          </button>
+        </div>
       </Row>
     </div>
   );
@@ -227,13 +257,12 @@ function AboutSection() {
             Support Adaka
           </button>
         ) : (
-          <span
-            title="Coming soon — no sponsor account yet"
-            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-adaka-faint"
-          >
-            <HeartIcon className="h-3.5 w-3.5" />
-            Support Adaka
-          </span>
+          <Tooltip content="Coming soon — no sponsor account yet">
+            <span className="flex cursor-not-allowed items-center gap-1.5 text-xs text-adaka-faint">
+              <HeartIcon className="h-3.5 w-3.5" />
+              Support Adaka
+            </span>
+          </Tooltip>
         )}
       </div>
     </div>

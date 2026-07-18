@@ -25,6 +25,8 @@ export const SHORTCUTS = [
   { id: "shortcuts", label: "Keyboard shortcuts", keys: "Ctrl+/", scope: "global" },
   { id: "new-workspace-tab", label: "New workspace tab", keys: "Ctrl+T", scope: "global" },
   { id: "settings", label: "Settings", keys: "Ctrl+,", scope: "global" },
+  { id: "next-tab", label: "Next tab", keys: "Ctrl+Tab", scope: "global" },
+  { id: "prev-tab", label: "Previous tab", keys: "Ctrl+Shift+Tab", scope: "global" },
   { id: "dismiss", label: "Close dialog", keys: "Escape", scope: "global" },
   { id: "send", label: "Send request", keys: "Ctrl+Enter", scope: "api-client" },
   { id: "save", label: "Save request", keys: "Ctrl+S", scope: "api-client" },

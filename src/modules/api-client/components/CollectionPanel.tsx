@@ -76,9 +76,9 @@ export function CollectionPanel() {
           value: report.generated_env,
         }).catch(() => {});
         window.dispatchEvent(new CustomEvent("adaka:env-reload"));
-        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""} — switched to '${report.generated_env}' environment`);
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""} — switched to '${report.generated_env}' environment`, "success");
       } else {
-        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`);
+        ctx.ui.toast(`Imported ${report.imported_count} request${report.imported_count !== 1 ? "s" : ""}`, "success");
       }
     } catch (e) {
       api.getState().setImporting(false);
@@ -97,7 +97,7 @@ export function CollectionPanel() {
         envName,
       });
       await navigator.clipboard.writeText(curl);
-      ctx.ui.toast("Copied as cURL");
+      ctx.ui.toast("Copied as cURL", "success");
     } catch (e) {
       ctx.ui.toast(`Copy failed: ${formatError(e)}`, "error");
     }

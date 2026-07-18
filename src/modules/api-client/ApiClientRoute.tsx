@@ -8,7 +8,7 @@ import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
 import { ImportReportPanel } from "./components/ImportReportPanel";
-import { StackedSplit, clampSplitRatio } from "./components/StackedSplit";
+import { StackedSplit, clampSplitRatio, type SplitOrientation } from "./components/StackedSplit";
 import type { SendResponse, StructuredError, HistoryListEntry } from "./types";
 
 const DEFAULT_SPLIT_RATIO = 0.45;
@@ -20,6 +20,8 @@ export function ApiClientRoute() {
   const importReport = useApiClientStore((s) => s.importReport);
   const setImportReport = useApiClientStore((s) => s.setImportReport);
 
+  const [splitLayout, setSplitLayoutState] = useState<"stacked" | "side-by-side">("stacked");
+  const splitOrientation: SplitOrientation = splitLayout === "side-by-side" ? "vertical" : "horizontal";
   const splitPrefKey = `apiClientSplit:${ctx.workspace.id}`;
   const [splitRatio, setSplitRatioState] = useState(DEFAULT_SPLIT_RATIO);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,6 +30,9 @@ export function ApiClientRoute() {
     let cancelled = false;
     void getPref<number>(splitPrefKey).then((v) => {
       if (!cancelled && typeof v === "number") setSplitRatioState(clampSplitRatio(v));
+    });
+    void getPref<string>("splitLayout").then((v) => {
+      if (!cancelled && (v === "stacked" || v === "side-by-side")) setSplitLayoutState(v);
     });
     return () => {
       cancelled = true;
@@ -98,7 +103,7 @@ export function ApiClientRoute() {
       });
       api.getState().setActiveRequestPath(path);
       api.getState().setDirty(false);
-      ctx.ui.toast("Request saved");
+      ctx.ui.toast("Request saved", "success");
     } catch (e) {
       ctx.ui.toast(`Save failed: ${formatError(e)}`, "error");
     }
@@ -186,6 +191,7 @@ export function ApiClientRoute() {
       <StackedSplit
         ratio={splitRatio}
         onChange={setSplitRatio}
+        orientation={splitOrientation}
         top={
           <RequestEditor
             onSend={sendRequest}

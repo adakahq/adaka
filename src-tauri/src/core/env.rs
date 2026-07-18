@@ -213,6 +213,67 @@ fn find_closing_braces(template: &str, start: usize) -> Option<usize> {
 }
 
 // ---------------------------------------------------------------------------
+// Document-level operations (preserve comments & unknown keys via toml_edit)
+// ---------------------------------------------------------------------------
+
+/// Read the raw TOML for an environment, parse it as a DocumentMut for editing.
+fn load_doc(root: &Path, env_name: &str) -> Result<(String, DocumentMut), EnvError> {
+    let relative = format!("environments/{}.toml", env_name);
+    let raw = workspace::read_file(root, &relative).map_err(|e| match &e {
+        workspace::WorkspaceError::Io(io_err) if io_err.kind() == std::io::ErrorKind::NotFound => {
+            EnvError::NotFound(env_name.to_string())
+        }
+        _ => EnvError::Workspace(e),
+    })?;
+    let doc: DocumentMut = raw
+        .parse()
+        .map_err(|e: toml_edit::TomlError| EnvError::TomlParse(e.to_string()))?;
+    Ok((raw, doc))
+}
+
+/// Write a DocumentMut back to disk, preserving formatting.
+fn save_doc(root: &Path, env_name: &str, doc: &DocumentMut) -> Result<(), EnvError> {
+    let relative = format!("environments/{}.toml", env_name);
+    let content = doc.to_string();
+    workspace::write_file(root, &relative, &content).map_err(EnvError::Workspace)
+}
+
+/// Set a variable in [vars]. Creates the [vars] table if it doesn't exist.
+pub fn set_var(root: &Path, env_name: &str, key: &str, value: &str) -> Result<(), EnvError> {
+    let (_raw, mut doc) = load_doc(root, env_name)?;
+    if !doc.contains_key("vars") {
+        doc["vars"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+    doc["vars"][key] = toml_edit::value(value);
+    save_doc(root, env_name, &doc)
+}
+
+/// Remove a variable from [vars].
+pub fn remove_var(root: &Path, env_name: &str, key: &str) -> Result<(), EnvError> {
+    let (_raw, mut doc) = load_doc(root, env_name)?;
+    if let Some(tbl) = doc.get_mut("vars").and_then(|v| v.as_table_mut()) {
+        tbl.remove(key);
+    }
+    save_doc(root, env_name, &doc)
+}
+
+/// Rename a variable in [vars], preserving the value.
+pub fn rename_var(
+    root: &Path,
+    env_name: &str,
+    old_key: &str,
+    new_key: &str,
+) -> Result<(), EnvError> {
+    let (_raw, mut doc) = load_doc(root, env_name)?;
+    if let Some(tbl) = doc.get_mut("vars").and_then(|v| v.as_table_mut()) {
+        if let Some(item) = tbl.remove(old_key) {
+            tbl.insert(new_key, item);
+        }
+    }
+    save_doc(root, env_name, &doc)
+}
+
+// ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
 
@@ -225,6 +286,36 @@ pub fn env_list(path: String) -> Result<Vec<String>, EnvError> {
 pub fn env_resolve(path: String, env_name: String, template: String) -> Result<String, EnvError> {
     let env = load_environment(Path::new(&path), &env_name)?;
     resolve(&template, &env)
+}
+
+#[tauri::command]
+pub fn env_load(path: String, env_name: String) -> Result<Environment, EnvError> {
+    load_environment(Path::new(&path), &env_name)
+}
+
+#[tauri::command]
+pub fn env_set_var(
+    path: String,
+    env_name: String,
+    key: String,
+    value: String,
+) -> Result<(), EnvError> {
+    set_var(Path::new(&path), &env_name, &key, &value)
+}
+
+#[tauri::command]
+pub fn env_remove_var(path: String, env_name: String, key: String) -> Result<(), EnvError> {
+    remove_var(Path::new(&path), &env_name, &key)
+}
+
+#[tauri::command]
+pub fn env_rename_var(
+    path: String,
+    env_name: String,
+    old_key: String,
+    new_key: String,
+) -> Result<(), EnvError> {
+    rename_var(Path::new(&path), &env_name, &old_key, &new_key)
 }
 
 // ---------------------------------------------------------------------------
@@ -411,5 +502,96 @@ mod tests {
         };
         let result = resolve("say: {{GREETING}}!", &env).unwrap();
         assert_eq!(result, "say: héllo wörld 🌍!");
+    }
+
+    // --- Tests for document-level operations (set_var, remove_var, rename_var) ---
+
+    #[test]
+    fn set_var_creates_vars_table_if_missing() {
+        let root = tmp_workspace();
+        write_env(root.path(), "empty", "name = \"empty\"\n");
+        set_var(root.path(), "empty", "FOO", "bar").unwrap();
+
+        let env = load_environment(root.path(), "empty").unwrap();
+        assert_eq!(env.vars.get("FOO").unwrap(), "bar");
+    }
+
+    #[test]
+    fn set_var_preserves_comments() {
+        let root = tmp_workspace();
+        let content = "# This is a comment\nname = \"test\"\n\n[vars]\n# important var\nBASE = \"http://localhost\"\n";
+        write_env(root.path(), "commented", content);
+
+        set_var(root.path(), "commented", "NEW_VAR", "hello").unwrap();
+
+        let relative = "environments/commented.toml";
+        let raw = workspace::read_file(root.path(), relative).unwrap();
+        assert!(raw.contains("# This is a comment"), "top comment preserved");
+        assert!(raw.contains("# important var"), "inline comment preserved");
+        assert!(raw.contains("NEW_VAR = \"hello\""));
+    }
+
+    #[test]
+    fn set_var_updates_existing_value() {
+        let root = tmp_workspace();
+        let content = "name = \"test\"\n\n[vars]\nFOO = \"old\"\n";
+        write_env(root.path(), "update", content);
+
+        set_var(root.path(), "update", "FOO", "new").unwrap();
+
+        let env = load_environment(root.path(), "update").unwrap();
+        assert_eq!(env.vars.get("FOO").unwrap(), "new");
+    }
+
+    #[test]
+    fn remove_var_deletes_key() {
+        let root = tmp_workspace();
+        let content = "name = \"test\"\n\n[vars]\nFOO = \"bar\"\nBAZ = \"qux\"\n";
+        write_env(root.path(), "rm", content);
+
+        remove_var(root.path(), "rm", "FOO").unwrap();
+
+        let env = load_environment(root.path(), "rm").unwrap();
+        assert!(!env.vars.contains_key("FOO"));
+        assert_eq!(env.vars.get("BAZ").unwrap(), "qux");
+    }
+
+    #[test]
+    fn remove_var_noop_for_missing_key() {
+        let root = tmp_workspace();
+        let content = "name = \"test\"\n\n[vars]\nFOO = \"bar\"\n";
+        write_env(root.path(), "noop", content);
+
+        remove_var(root.path(), "noop", "NONEXISTENT").unwrap();
+
+        let env = load_environment(root.path(), "noop").unwrap();
+        assert_eq!(env.vars.get("FOO").unwrap(), "bar");
+    }
+
+    #[test]
+    fn rename_var_moves_value() {
+        let root = tmp_workspace();
+        let content = "name = \"test\"\n\n[vars]\nOLD_NAME = \"value123\"\n";
+        write_env(root.path(), "rename", content);
+
+        rename_var(root.path(), "rename", "OLD_NAME", "NEW_NAME").unwrap();
+
+        let env = load_environment(root.path(), "rename").unwrap();
+        assert!(!env.vars.contains_key("OLD_NAME"));
+        assert_eq!(env.vars.get("NEW_NAME").unwrap(), "value123");
+    }
+
+    #[test]
+    fn rename_var_preserves_other_keys() {
+        let root = tmp_workspace();
+        let content = "name = \"test\"\n\n[vars]\nA = \"1\"\nB = \"2\"\nC = \"3\"\n";
+        write_env(root.path(), "ren2", content);
+
+        rename_var(root.path(), "ren2", "B", "B_NEW").unwrap();
+
+        let env = load_environment(root.path(), "ren2").unwrap();
+        assert_eq!(env.vars.get("A").unwrap(), "1");
+        assert_eq!(env.vars.get("B_NEW").unwrap(), "2");
+        assert_eq!(env.vars.get("C").unwrap(), "3");
     }
 }

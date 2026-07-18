@@ -14,3 +14,45 @@ body,
   padding: 0;
   overflow: hidden;
 }
+
+/* Themed scrollbar for every internal scrolling pane — thin, charcoal
+   track, muted thumb that lightens on hover, no OS-default light-grey
+   bar breaking the gold-on-charcoal chrome. Firefox via scrollbar-color,
+   everything else (incl. the Tauri/WebView2 host) via ::-webkit-scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a332a #1c1814;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #3a332a;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #6b6258;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
