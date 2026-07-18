@@ -2,10 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The window chrome itself must never scroll — every screen owns exactly
+   the panes that scroll (a response body, a collection tree, a settings
+   list); if content overflows without one of those, it should be visible
+   as a layout bug, not silently absorbed into a whole-window scrollbar. */
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }

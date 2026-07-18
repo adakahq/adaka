@@ -44,7 +44,7 @@ export function ResponsePane() {
   const showError = error && !viewingHistory && !sending;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* History banner */}
       {viewingHistory && (
         <HistoryBanner
@@ -91,7 +91,7 @@ export function ResponsePane() {
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {responseTab === "history" ? (
           <HistoryPanel />
         ) : sending ? (

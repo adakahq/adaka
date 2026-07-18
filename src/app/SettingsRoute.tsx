@@ -6,6 +6,7 @@ import { useSettingsStore } from "./settings-store";
 import { useGlobalStore, type Theme } from "./global-store";
 import { useShellStore } from "./store";
 import { SHORTCUTS, formatKey } from "../shared/shortcuts";
+import { Toggle } from "../shared/Toggle";
 
 type Section = "general" | "appearance" | "shortcuts" | "about";
 
@@ -20,41 +21,6 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "shortcuts", label: "Shortcuts" },
   { id: "about", label: "About" },
 ];
-
-/** The one boolean-setting switch used everywhere in Settings — 36×20 track,
- * sliding thumb, gold when on. Stops propagation so it can sit inside a
- * <Row onClick> (the row's own label click) without double-toggling. */
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onChange(!checked);
-      }}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-adaka-gold focus-visible:ring-offset-2 focus-visible:ring-offset-adaka-chrome ${
-        checked ? "bg-adaka-gold" : "bg-adaka-border-strong"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-adaka-bg transition-transform duration-150 ${
-          checked ? "translate-x-4" : "translate-x-0.5"
-        }`}
-      />
-    </button>
-  );
-}
 
 function Row({
   title,

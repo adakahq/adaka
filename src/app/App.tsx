@@ -82,12 +82,12 @@ function WorkspaceTabContent({ tab }: { tab: WorkspaceTab }) {
     return <WelcomeScreen tabId={tab.id} />;
   }
   return (
-    <div className="flex h-full flex-col bg-adaka-bg text-adaka-text">
+    <div className="flex h-full min-h-0 flex-col bg-adaka-bg text-adaka-text">
       <TitleBar />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <ModuleRail />
         <ContextPanel />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <TabBar />
           <MainPane />
         </div>
@@ -114,11 +114,11 @@ function Shell() {
       {/* Every open workspace tab stays mounted (hidden via CSS, not
           unmounted) so switching is instant and nothing reloads — in-flight
           sends, drafts, and scroll position all survive backgrounding. */}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={tab.id === activeTabId ? "flex h-full w-full flex-col" : "hidden"}
+            className={tab.id === activeTabId ? "flex h-full min-h-0 w-full flex-col" : "hidden"}
           >
             <WorkspaceTabProvider value={{ tabId: tab.id, session: tab.session }}>
               <WorkspaceTabContent tab={tab} />
