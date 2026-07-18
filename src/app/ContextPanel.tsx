@@ -33,7 +33,7 @@ export function ContextPanel() {
                 key={action.id}
                 className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
                 title={action.label}
-                onClick={action.action}
+                onClick={() => ctx && action.action(ctx)}
               >
                 {action.icon ?? (
                   <span className="text-xs">{action.label}</span>

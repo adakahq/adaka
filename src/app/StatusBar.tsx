@@ -1,11 +1,15 @@
+import { useStore } from "zustand";
 import { useShellStore } from "./store";
-import { useApiClientStore } from "../modules/api-client/store";
+import { getApiClientStore } from "../modules/api-client/store";
 
 export function StatusBar() {
   const activeTabId = useShellStore((s) => s.activeTabId);
   const tabs = useShellStore((s) => s.tabs);
-  const activeRequestPath = useApiClientStore((s) => s.activeRequestPath);
-  const dirty = useApiClientStore((s) => s.dirty);
+  const workspace = useShellStore((s) => s.workspace);
+
+  const apiClientStore = getApiClientStore(workspace.id);
+  const activeRequestPath = useStore(apiClientStore, (s) => s.activeRequestPath);
+  const dirty = useStore(apiClientStore, (s) => s.dirty);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isApiTab = activeTab?.moduleId === "api-client";

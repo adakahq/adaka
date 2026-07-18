@@ -35,8 +35,6 @@ export function WorkspaceHome() {
   const workspace = useShellStore((s) => s.workspace);
   const moduleContexts = useShellStore((s) => s.moduleContexts);
 
-  if (!workspace) return null;
-
   const modules = getModules();
 
   return (

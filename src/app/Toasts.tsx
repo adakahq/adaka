@@ -1,8 +1,8 @@
-import { useShellStore } from "./store";
+import { useGlobalStore } from "./global-store";
 
 export function Toasts() {
-  const toasts = useShellStore((s) => s.toasts);
-  const removeToast = useShellStore((s) => s.removeToast);
+  const toasts = useGlobalStore((s) => s.toasts);
+  const removeToast = useGlobalStore((s) => s.removeToast);
 
   if (toasts.length === 0) return null;
 

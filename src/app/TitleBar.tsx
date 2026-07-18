@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useShellStore } from "./store";
-import { closeWorkspace, switchWorkspace } from "./workspace-actions";
+import { useGlobalStore } from "./global-store";
+import { useWorkspaceTab } from "./workspace-tab-context";
+import { closeWorkspaceTab, openWorkspaceInTab } from "./workspace-actions";
 import { getPref } from "../shared/prefs";
 import { getRecents, type RecentWorkspace } from "../shared/recents";
 
 export function TitleBar() {
   const workspace = useShellStore((s) => s.workspace);
-  const setPaletteOpen = useShellStore((s) => s.setPaletteOpen);
+  const setPaletteOpen = useGlobalStore((s) => s.setPaletteOpen);
 
   return (
     <div className="flex h-10 shrink-0 items-center border-b border-adaka-border bg-adaka-chrome px-3">
@@ -16,11 +18,7 @@ export function TitleBar() {
         <div className="flex h-6 w-6 items-center justify-center rounded bg-adaka-gold text-xs font-bold text-adaka-on-gold select-none">
           A
         </div>
-        {workspace ? (
-          <WorkspaceMenu name={workspace.name} currentRoot={workspace.root} />
-        ) : (
-          <span className="text-sm font-medium text-adaka-muted">Adaka</span>
-        )}
+        <WorkspaceMenu name={workspace.name} currentRoot={workspace.root} />
       </div>
 
       {/* Center: search / command affordance */}
@@ -41,7 +39,7 @@ export function TitleBar() {
 
       {/* Right: Variables selector + gear */}
       <div className="flex items-center gap-2">
-        {workspace && <EnvSelector />}
+        <EnvSelector />
       </div>
     </div>
   );
@@ -51,6 +49,7 @@ function WorkspaceMenu({ name, currentRoot }: { name: string; currentRoot: strin
   const [open, setOpen] = useState(false);
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { tabId } = useWorkspaceTab();
 
   useEffect(() => {
     if (!open) return;
@@ -83,13 +82,10 @@ function WorkspaceMenu({ name, currentRoot }: { name: string; currentRoot: strin
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-adaka-text hover:bg-adaka-border"
             onClick={() => {
               setOpen(false);
-              const ws = useShellStore.getState().workspace;
-              if (ws) {
-                void invoke("workspace_reveal_path", {
-                  path: ws.root,
-                  relative: "",
-                }).catch(() => {});
-              }
+              void invoke("workspace_reveal_path", {
+                path: currentRoot,
+                relative: "",
+              }).catch(() => {});
             }}
           >
             Reveal in Explorer
@@ -107,7 +103,7 @@ function WorkspaceMenu({ name, currentRoot }: { name: string; currentRoot: strin
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-adaka-text hover:bg-adaka-border"
                   onClick={() => {
                     setOpen(false);
-                    switchWorkspace(r.path);
+                    openWorkspaceInTab(r.path);
                   }}
                   title={r.path}
                 >
@@ -122,7 +118,7 @@ function WorkspaceMenu({ name, currentRoot }: { name: string; currentRoot: strin
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 hover:bg-adaka-border"
             onClick={() => {
               setOpen(false);
-              closeWorkspace();
+              closeWorkspaceTab(tabId);
             }}
           >
             Close workspace
@@ -142,7 +138,6 @@ function EnvSelector() {
   const [envs, setEnvs] = useState<string[]>([]);
 
   const loadEnvs = useCallback(() => {
-    if (!workspace) return;
     void invoke<string[]>("env_list", { path: workspace.root })
       .then((list) => {
         setEnvs(list);
@@ -164,7 +159,6 @@ function EnvSelector() {
   }, [loadEnvs]);
 
   useEffect(() => {
-    if (!workspace) return;
     void getPref<string>(`activeEnv:${workspace.id}`).then((saved) => {
       if (saved) setActiveEnv(saved);
     });
@@ -174,12 +168,10 @@ function EnvSelector() {
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const name = e.target.value;
       setActiveEnv(name);
-      if (workspace) {
-        void invoke("core_set_pref", {
-          key: `activeEnv:${workspace.id}`,
-          value: name,
-        }).catch(() => {});
-      }
+      void invoke("core_set_pref", {
+        key: `activeEnv:${workspace.id}`,
+        value: name,
+      }).catch(() => {});
     },
     [workspace, setActiveEnv],
   );

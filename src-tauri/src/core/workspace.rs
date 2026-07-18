@@ -6,6 +6,33 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use toml_edit::DocumentMut;
 
+use super::prefs::PrefsStore;
+
+const DEFAULT_WORKSPACE_FOLDER_KEY: &str = "defaultWorkspaceFolder";
+
+/// Resolves the folder new workspaces are created in: a user-configured
+/// override from Settings (§ General) if one is set, otherwise
+/// `<documents>/Adaka`.
+fn resolve_default_dir(
+    app: &tauri::AppHandle,
+    store: &PrefsStore,
+) -> Result<PathBuf, WorkspaceError> {
+    use tauri::Manager;
+    if let Some(v) = store.get(DEFAULT_WORKSPACE_FOLDER_KEY) {
+        if let Some(s) = v.as_str() {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                return Ok(PathBuf::from(trimmed));
+            }
+        }
+    }
+    let docs = app
+        .path()
+        .document_dir()
+        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
+    Ok(docs.join("Adaka"))
+}
+
 const ADAKA_DIR: &str = ".adaka";
 const WORKSPACE_FILE: &str = "workspace.toml";
 const CURRENT_VERSION: i64 = 1;
@@ -458,21 +485,21 @@ pub fn workspace_reveal_path(path: String, relative: String) -> Result<(), Works
 }
 
 #[tauri::command]
-pub fn workspace_default_dir(app: tauri::AppHandle) -> Result<String, WorkspaceError> {
-    use tauri::Manager;
-    let docs = app
-        .path()
-        .document_dir()
-        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
-    Ok(docs.join("Adaka").to_string_lossy().to_string())
+pub fn workspace_default_dir(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, PrefsStore>,
+) -> Result<String, WorkspaceError> {
+    Ok(resolve_default_dir(&app, &store)?
+        .to_string_lossy()
+        .to_string())
 }
 
 #[tauri::command]
 pub fn workspace_quick_create(
     name: String,
     app: tauri::AppHandle,
+    store: tauri::State<'_, PrefsStore>,
 ) -> Result<WorkspaceInfo, WorkspaceError> {
-    use tauri::Manager;
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err(WorkspaceError::PathTraversal(
@@ -484,11 +511,8 @@ pub fn workspace_quick_create(
             "name contains characters not allowed in folder names: {name}"
         )));
     }
-    let docs = app
-        .path()
-        .document_dir()
-        .map_err(|e| WorkspaceError::Io(std::io::Error::other(e.to_string())))?;
-    let ws_root = docs.join("Adaka").join(&name);
+    let default_dir = resolve_default_dir(&app, &store)?;
+    let ws_root = default_dir.join(&name);
     if ws_root.exists() {
         return Err(WorkspaceError::AlreadyExists(ws_root));
     }

@@ -3,7 +3,7 @@ import type { AdakaModule, PaletteCommand } from "../../shared/module-sdk";
 import { ApiClientRoute } from "./ApiClientRoute";
 import { CollectionPanel } from "./components/CollectionPanel";
 import { EnvEditorRoute } from "./components/EnvEditorRoute";
-import { useApiClientStore } from "./store";
+import { getApiClientStore } from "./store";
 
 const commands: PaletteCommand[] = [
   {
@@ -12,7 +12,7 @@ const commands: PaletteCommand[] = [
     keywords: ["create", "request", "http"],
     action: (ctx) => {
       ctx.ui.openTab("main");
-      useApiClientStore.getState().createDraft();
+      getApiClientStore(ctx.workspace.id).getState().createDraft();
     },
   },
   {
@@ -33,7 +33,7 @@ const commands: PaletteCommand[] = [
     keywords: ["history", "past", "responses"],
     action: (ctx) => {
       ctx.ui.openTab("main");
-      useApiClientStore.getState().setResponseTab("history");
+      getApiClientStore(ctx.workspace.id).getState().setResponseTab("history");
     },
   },
   {
@@ -88,7 +88,7 @@ const apiClientModule: AdakaModule = {
             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
           </svg>
         ),
-        action: () => useApiClientStore.getState().createDraft(),
+        action: (ctx) => getApiClientStore(ctx.workspace.id).getState().createDraft(),
       },
     ],
     emptyState: {
@@ -96,7 +96,6 @@ const apiClientModule: AdakaModule = {
       cta: "api:new-request",
     },
   },
-  isDirty: () => useApiClientStore.getState().dirty,
 };
 
 registerModule(apiClientModule);

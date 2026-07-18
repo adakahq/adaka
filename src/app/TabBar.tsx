@@ -1,5 +1,7 @@
+import { useStore } from "zustand";
 import { useShellStore } from "./store";
-import { useApiClientStore } from "../modules/api-client/store";
+import { useGlobalStore } from "./global-store";
+import { getApiClientStore } from "../modules/api-client/store";
 import { isTabDirty, envNameFromTabId, ENV_TAB_PREFIX } from "./tab-dirty";
 
 export function TabBar() {
@@ -7,11 +9,17 @@ export function TabBar() {
   const activeTabId = useShellStore((s) => s.activeTabId);
   const setActiveTab = useShellStore((s) => s.setActiveTab);
   const closeTab = useShellStore((s) => s.closeTab);
-  const showConfirm = useShellStore((s) => s.showConfirm);
-  const dismissConfirm = useShellStore((s) => s.dismissConfirm);
-  const apiDirty = useApiClientStore((s) => s.dirty);
-  const dirtyEnvs = useApiClientStore((s) => s.dirtyEnvs);
-  const setEnvDirty = useApiClientStore((s) => s.setEnvDirty);
+  const workspace = useShellStore((s) => s.workspace);
+  const showConfirm = useGlobalStore((s) => s.showConfirm);
+  const dismissConfirm = useGlobalStore((s) => s.dismissConfirm);
+
+  // TabBar is shell-level chrome, not a module route, so it can't reach
+  // api-client's store via ModuleContext — resolve it directly by this
+  // workspace's id instead (same registry api-client's own components use).
+  const apiClientStore = getApiClientStore(workspace.id);
+  const apiDirty = useStore(apiClientStore, (s) => s.dirty);
+  const dirtyEnvs = useStore(apiClientStore, (s) => s.dirtyEnvs);
+  const setEnvDirty = useStore(apiClientStore, (s) => s.setEnvDirty);
 
   if (tabs.length === 0) return null;
 
