@@ -9,6 +9,11 @@ import { SHORTCUTS, formatKey } from "../shared/shortcuts";
 
 type Section = "general" | "appearance" | "shortcuts" | "about";
 
+/** Set once a sponsor account (GitHub Sponsors / Open Collective / etc.)
+ * exists — see .github/FUNDING.yml. Empty means "not live yet", so the
+ * About page renders the row disabled rather than linking nowhere. */
+const FUNDING_URL = "";
+
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "general", label: "General" },
   { id: "appearance", label: "Appearance" },
@@ -16,6 +21,9 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "about", label: "About" },
 ];
 
+/** The one boolean-setting switch used everywhere in Settings — 36×20 track,
+ * sliding thumb, gold when on. Stops propagation so it can sit inside a
+ * <Row onClick> (the row's own label click) without double-toggling. */
 function Toggle({
   checked,
   onChange,
@@ -27,16 +35,20 @@ function Toggle({
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
+      }}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-adaka-gold focus-visible:ring-offset-2 focus-visible:ring-offset-adaka-chrome ${
         checked ? "bg-adaka-gold" : "bg-adaka-border-strong"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-adaka-bg transition-transform ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-adaka-bg transition-transform duration-150 ${
           checked ? "translate-x-4" : "translate-x-0.5"
         }`}
       />
@@ -47,14 +59,19 @@ function Toggle({
 function Row({
   title,
   detail,
+  onClick,
   children,
 }: {
   title: string;
   detail?: string;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3">
+    <div
+      className={`flex items-center justify-between gap-4 py-3 ${onClick ? "cursor-pointer" : ""}`}
+      onClick={onClick}
+    >
       <div className="min-w-0">
         <p className="text-sm text-adaka-text">{title}</p>
         {detail && <p className="mt-0.5 text-xs text-adaka-faint">{detail}</p>}
@@ -100,6 +117,7 @@ function GeneralSection() {
       <Row
         title="Reopen last session"
         detail="Restore your open workspace tabs when Adaka starts"
+        onClick={() => void setReopen(!reopen)}
       >
         <Toggle checked={reopen} onChange={(v) => void setReopen(v)} label="Reopen last session" />
       </Row>
@@ -145,6 +163,10 @@ function AppearanceSection() {
       <Row
         title="Rail collapsed by default"
         detail="New workspace tabs open with the module rail collapsed"
+        onClick={() => {
+          void setRailDefault(!railDefault);
+          setRailCollapsed(!railDefault);
+        }}
       >
         <Toggle
           checked={railDefault}
@@ -229,7 +251,34 @@ function AboutSection() {
           Report an issue
         </button>
       </div>
+      <div className="mt-4 border-t border-adaka-border pt-4">
+        {FUNDING_URL ? (
+          <button
+            className="flex items-center gap-1.5 text-xs text-adaka-gold hover:underline"
+            onClick={() => void openExternal(FUNDING_URL)}
+          >
+            <HeartIcon className="h-3.5 w-3.5" />
+            Support Adaka
+          </button>
+        ) : (
+          <span
+            title="Coming soon — no sponsor account yet"
+            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-adaka-faint"
+          >
+            <HeartIcon className="h-3.5 w-3.5" />
+            Support Adaka
+          </span>
+        )}
+      </div>
     </div>
+  );
+}
+
+function HeartIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 21s-6.7-4.35-9.33-8.02C1.02 10.9 1 8.5 2.64 6.86a5 5 0 0 1 7.07 0L12 9.17l2.29-2.3a5 5 0 0 1 7.07 0c1.64 1.64 1.62 4.04-.03 6.12C18.7 16.65 12 21 12 21z" />
+    </svg>
   );
 }
 
