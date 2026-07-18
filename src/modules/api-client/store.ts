@@ -11,7 +11,7 @@ interface ApiClientState {
   activeRequestId: string | null;
   response: SendResponse | null;
   error: StructuredError | null;
-  activeTab: "params" | "headers" | "auth" | "body";
+  activeTab: "params" | "headers" | "auth" | "body" | "settings";
   responseTab: "body" | "headers" | "timing" | "history";
   prettyBody: boolean;
   historyEntries: HistoryListEntry[];

@@ -3,6 +3,7 @@ import { useApiClientStore } from "../store";
 import { KeyValueGrid } from "./KeyValueGrid";
 import { AuthEditor } from "./AuthEditor";
 import { BodyEditor } from "./BodyEditor";
+import { RequestSettingsTab } from "./RequestSettingsTab";
 import { UrlBar } from "./UrlBar";
 import type { CurlParseResult } from "../types";
 import { curlResultToRequestUpdate } from "../curl";
@@ -13,7 +14,7 @@ interface Props {
   onSave: () => void;
 }
 
-const TABS = ["params", "headers", "auth", "body"] as const;
+const TABS = ["params", "headers", "auth", "body", "settings"] as const;
 
 export function RequestEditor({ onSend, onCancel, onSave }: Props) {
   const activeRequest = useApiClientStore((s) => s.activeRequest);
@@ -65,7 +66,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
     } catch { /* malformed snapshot — show what we can */ }
 
     return (
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex items-center gap-2 border-b border-amber-800/40 bg-amber-950/20 px-3 py-1.5">
           <span className="text-xs text-amber-300">Request as sent</span>
         </div>
@@ -77,7 +78,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
             {snapshot.url ?? viewingHistory.url_resolved}
           </span>
         </div>
-        <div className="flex-1 overflow-auto p-3">
+        <div className="min-h-0 flex-1 overflow-auto p-3">
           {snapshot.headers && Object.keys(snapshot.headers).length > 0 && (
             <div className="mb-3">
               <h4 className="mb-1 text-[10px] font-medium text-adaka-faint uppercase tracking-wide">Headers</h4>
@@ -119,7 +120,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {isDraft && (
         <div className="flex items-center gap-2 border-b border-adaka-border px-3 py-1.5">
           <label className="text-xs text-adaka-muted">Name</label>
@@ -175,7 +176,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-3">
+      <div className="min-h-0 flex-1 overflow-auto p-3">
         {activeTab === "params" && (
           <KeyValueGrid
             entries={activeRequest.query}
@@ -200,6 +201,7 @@ export function RequestEditor({ onSend, onCancel, onSave }: Props) {
         )}
         {activeTab === "auth" && <AuthEditor />}
         {activeTab === "body" && <BodyEditor />}
+        {activeTab === "settings" && <RequestSettingsTab />}
       </div>
       {activeRequestPath && (
         <div className="border-t border-adaka-border px-3 py-1">

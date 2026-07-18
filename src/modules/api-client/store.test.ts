@@ -159,6 +159,29 @@ describe("createApiClientStore", () => {
     expect(req.url).toBe("http://{{NOPE}}/api");
   });
 
+  test("updateRequest merges a settings partial without dropping sibling fields", () => {
+    const store = createApiClientStore();
+    store.getState().setActiveRequest(blankRequest());
+
+    const before = store.getState().activeRequest;
+    if (!before) throw new Error("expected activeRequest");
+    store.getState().updateRequest({ settings: { ...before.settings, timeout_ms: 5000 } });
+    expect(store.getState().activeRequest?.settings).toEqual({
+      timeout_ms: 5000,
+      follow_redirects: true,
+      verify_tls: true,
+    });
+
+    const mid = store.getState().activeRequest;
+    if (!mid) throw new Error("expected activeRequest");
+    store.getState().updateRequest({ settings: { ...mid.settings, verify_tls: false } });
+    expect(store.getState().activeRequest?.settings).toEqual({
+      timeout_ms: 5000,
+      follow_redirects: true,
+      verify_tls: false,
+    });
+  });
+
   test("two workspace stores coexist without bleeding", () => {
     const storeA = createApiClientStore();
     const storeB = createApiClientStore();

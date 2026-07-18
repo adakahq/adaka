@@ -20,7 +20,7 @@ export function ContextPanel() {
   const PanelComponent = panel.component;
 
   return (
-    <div className="flex h-full w-60 min-w-[140px] max-w-[400px] flex-col border-r border-adaka-border bg-adaka-chrome">
+    <div className="flex h-full min-h-0 w-60 min-w-[140px] max-w-[400px] flex-col border-r border-adaka-border bg-adaka-chrome">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-adaka-border px-3 py-2">
         <span className="text-xs font-medium text-adaka-muted">
@@ -45,7 +45,7 @@ export function ContextPanel() {
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {ctx ? (
           <ModuleContextProvider value={ctx}>
             <PanelComponent />

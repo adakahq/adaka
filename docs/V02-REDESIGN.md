@@ -180,13 +180,37 @@ interface AdakaModule {
 
 - **Stacked split (the Postman migration):** request editor on top, response below,
   full width each, separated by a draggable horizontal divider (default 45/55,
-  persisted per workspace). Response pane is never a sidebar again.
+  min 25% either side, persisted per workspace via `apiClientSplit:<workspaceId>`
+  in prefs). Response pane is never a sidebar again — JSON gets the full window
+  width. The divider (`components/StackedSplit.tsx`) is drag-resizable and
+  keyboard-resizable (focus it, arrow keys step 2%, Home/End jump to the bounds)
+  per the skill's "mouse and keyboard are equal citizens" rule.
 - Request row: method ▾ · URL (var pills) · gold Send (Ctrl+↵ shown).
-- Request tabs strip: Params / Headers / Auth / Body / Settings.
+- Request tabs strip: Params / Headers / Auth / Body / Settings. Settings
+  (`components/RequestSettingsTab.tsx`) edits `[settings]` — timeout (ms, numeric,
+  1s–5min), follow redirects, verify TLS — which had been format-only since M1
+  (the fields round-tripped through TOML and `send.rs` already read them; there
+  was just no UI). Writes through the same `updateRequest`/dirty/save path as
+  every other tab, no separate save affordance.
 - Response strip: status chip · duration · size (left) — Body / Headers / Timing /
   History (n) tabs (right). Errors, spinners, empty states render inside the pane.
 - Env editor opens as an item tab (proper tab, not a pane hijack) — its dirty guard
   already exists; it gains a real tab close flow.
+- The boolean switch (timeout's neighbors, and everything in Settings §3.1) is
+  `shared/Toggle.tsx` — promoted out of the app-chrome Settings page on its
+  second use here per the skill's "extract to shared on second use" rule.
+
+### 5.1 Scroll containment
+
+Only designated inner panes scroll (a response body, a collection tree, a
+request-tab's content) — the window chrome itself never does. This was
+under-enforced: several flex containers in the rail→context-panel→tab-bar→
+work-area chain were missing `min-h-0`, so an oversized child could bubble its
+overflow up into an ancestor instead of scrolling in place, and `html`/`body`/
+`#root` had no `overflow: hidden` backstop. Fixed by auditing that chain
+(`App.tsx`, `MainPane.tsx`, `ContextPanel.tsx`, and every api-client leaf pane)
+and adding the backstop in `styles.css`. Any future nested-flex layout must
+carry `min-h-0` down the chain to whichever leaf owns the actual scrollbar.
 
 ## 6. Item tabs (top of work area)
 

@@ -1,13 +1,17 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useModuleContext } from "../../shared/module-sdk";
 import { formatError } from "../../shared/formatError";
 import { useShortcut } from "../../shared/useShortcut";
+import { getPref, setPref } from "../../shared/prefs";
 import { useApiClientStore, useApiClientStoreApi } from "./store";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponsePane } from "./components/ResponsePane";
 import { BaseUrlPrompt } from "./components/BaseUrlPrompt";
 import { ImportReportPanel } from "./components/ImportReportPanel";
+import { StackedSplit, clampSplitRatio } from "./components/StackedSplit";
 import type { SendResponse, StructuredError, HistoryListEntry } from "./types";
+
+const DEFAULT_SPLIT_RATIO = 0.45;
 
 export function ApiClientRoute() {
   const ctx = useModuleContext();
@@ -15,6 +19,39 @@ export function ApiClientRoute() {
   const [baseUrlDismissed, setBaseUrlDismissed] = useState(false);
   const importReport = useApiClientStore((s) => s.importReport);
   const setImportReport = useApiClientStore((s) => s.setImportReport);
+
+  const splitPrefKey = `apiClientSplit:${ctx.workspace.id}`;
+  const [splitRatio, setSplitRatioState] = useState(DEFAULT_SPLIT_RATIO);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getPref<number>(splitPrefKey).then((v) => {
+      if (!cancelled && typeof v === "number") setSplitRatioState(clampSplitRatio(v));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [splitPrefKey]);
+
+  const setSplitRatio = useCallback(
+    (r: number) => {
+      const clamped = clampSplitRatio(r);
+      setSplitRatioState(clamped);
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => {
+        void setPref(splitPrefKey, clamped);
+      }, 250);
+    },
+    [splitPrefKey],
+  );
+
+  useEffect(
+    () => () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    },
+    [],
+  );
 
   const {
     activeRequestPath,
@@ -142,20 +179,22 @@ export function ApiClientRoute() {
   );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {!baseUrlDismissed && (
         <BaseUrlPrompt onDismiss={() => setBaseUrlDismissed(true)} />
       )}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 flex-col overflow-hidden">
+      <StackedSplit
+        ratio={splitRatio}
+        onChange={setSplitRatio}
+        top={
           <RequestEditor
             onSend={sendRequest}
             onCancel={cancelRequest}
             onSave={saveRequest}
           />
-        </div>
-        <div className="flex w-[40%] min-w-[300px] flex-col overflow-hidden border-l border-adaka-border">
-          {importReport ? (
+        }
+        bottom={
+          importReport ? (
             <ImportReportPanel
               report={importReport}
               onDismiss={() => setImportReport(null)}
@@ -166,9 +205,9 @@ export function ApiClientRoute() {
             />
           ) : (
             <ResponsePane />
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
     </div>
   );
 }
