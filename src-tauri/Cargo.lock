@@ -8,6 +8,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "futures-util",
  "hyper",
  "rand 0.9.4",
  "reqwest 0.12.28",
