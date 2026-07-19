@@ -14,6 +14,7 @@ interface ApiClientState {
   activeTab: "params" | "headers" | "auth" | "body" | "settings";
   responseTab: "body" | "headers" | "timing" | "history";
   prettyBody: boolean;
+  bodyViewMode: "tree" | "raw" | "preview";
   historyEntries: HistoryListEntry[];
   viewingHistory: HistoryEntry | null;
   importReport: ImportReport | null;
@@ -32,6 +33,7 @@ interface ApiClientState {
   setActiveTab: (tab: ApiClientState["activeTab"]) => void;
   setResponseTab: (tab: ApiClientState["responseTab"]) => void;
   setPrettyBody: (pretty: boolean) => void;
+  setBodyViewMode: (mode: ApiClientState["bodyViewMode"]) => void;
   setHistoryEntries: (entries: HistoryListEntry[]) => void;
   setViewingHistory: (entry: HistoryEntry | null) => void;
   updateRequest: (partial: Partial<RequestFile>) => void;
@@ -61,6 +63,7 @@ export function createApiClientStore(): ApiClientStoreApi {
     activeTab: "params",
     responseTab: "body",
     prettyBody: true,
+    bodyViewMode: "tree",
     historyEntries: [],
     viewingHistory: null,
     importReport: null,
@@ -78,6 +81,7 @@ export function createApiClientStore(): ApiClientStoreApi {
     setActiveTab: (tab) => set({ activeTab: tab }),
     setResponseTab: (tab) => set({ responseTab: tab }),
     setPrettyBody: (pretty) => set({ prettyBody: pretty }),
+    setBodyViewMode: (mode) => set({ bodyViewMode: mode }),
     setHistoryEntries: (entries) => set({ historyEntries: entries }),
     setViewingHistory: (entry) => set({ viewingHistory: entry }),
     updateRequest: (partial) => {

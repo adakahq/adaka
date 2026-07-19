@@ -31,6 +31,7 @@ export interface WorkspaceShellState {
   openTab: (tab: Tab) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  cycleTab: (direction: 1 | -1) => void;
   setModuleContexts: (ctxs: Map<string, ModuleContext>) => void;
   setRailCollapsed: (collapsed: boolean) => void;
   bumpEnvReload: () => void;
@@ -72,6 +73,14 @@ export function createShellStore(workspace: WorkspaceInfo): ShellStoreApi {
     },
 
     setActiveTab: (id) => set({ activeTabId: id }),
+    cycleTab: (direction) => {
+      const { tabs, activeTabId } = get();
+      if (tabs.length <= 1) return;
+      const idx = tabs.findIndex((t) => t.id === activeTabId);
+      const next = (idx + direction + tabs.length) % tabs.length;
+      const nextTab = tabs[next];
+      if (nextTab) set({ activeTabId: nextTab.id });
+    },
     setModuleContexts: (ctxs) => set({ moduleContexts: ctxs }),
     setRailCollapsed: (collapsed) => set({ railCollapsed: collapsed }),
     bumpEnvReload: () => set((s) => ({ envReloadKey: s.envReloadKey + 1 })),

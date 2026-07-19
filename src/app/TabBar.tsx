@@ -3,6 +3,7 @@ import { useShellStore } from "./store";
 import { useGlobalStore } from "./global-store";
 import { getApiClientStore } from "../modules/api-client/store";
 import { isTabDirty, envNameFromTabId, ENV_TAB_PREFIX } from "./tab-dirty";
+import { Tooltip } from "../shared/Tooltip";
 
 export function TabBar() {
   const tabs = useShellStore((s) => s.tabs);
@@ -60,7 +61,9 @@ export function TabBar() {
           >
             <span className="max-w-[120px] truncate">{tab.label}</span>
             {isDirty && (
-              <span className="h-1.5 w-1.5 rounded-full bg-adaka-gold" title="Unsaved changes" />
+              <Tooltip content="Unsaved changes">
+                <span className="h-1.5 w-1.5 rounded-full bg-adaka-gold" />
+              </Tooltip>
             )}
             <span
               className="ml-1 hidden h-4 w-4 items-center justify-center rounded hover:bg-adaka-border-strong group-hover:flex"

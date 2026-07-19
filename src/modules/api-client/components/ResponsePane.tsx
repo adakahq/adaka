@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useApiClientStore } from "../store";
-import { formatBytes, formatDuration, statusColor } from "../utils";
+import { formatBytes, formatDuration } from "../utils";
 import { HistoryPanel } from "./HistoryPanel";
+import { JsonTreeView } from "./JsonTreeView";
 import type { TimingInfo } from "../types";
 
 const RESPONSE_TABS = ["body", "headers", "timing", "history"] as const;
@@ -13,6 +15,8 @@ export function ResponsePane() {
   const setResponseTab = useApiClientStore((s) => s.setResponseTab);
   const prettyBody = useApiClientStore((s) => s.prettyBody);
   const setPrettyBody = useApiClientStore((s) => s.setPrettyBody);
+  const bodyViewMode = useApiClientStore((s) => s.bodyViewMode);
+  const setBodyViewMode = useApiClientStore((s) => s.setBodyViewMode);
   const viewingHistory = useApiClientStore((s) => s.viewingHistory);
   const setViewingHistory = useApiClientStore((s) => s.setViewingHistory);
   const historyEntries = useApiClientStore((s) => s.historyEntries);
@@ -53,19 +57,14 @@ export function ResponsePane() {
         />
       )}
 
-      {/* Status line */}
+      {/* Status chip */}
       {showStatusLine && (
-        <div className="flex items-center gap-3 border-b border-adaka-border px-3 py-2">
-          <span className={`text-sm font-bold ${statusColor(effectiveResponse.status)}`}>
-            {effectiveResponse.status} {effectiveResponse.status_text}
-          </span>
-          <span className="text-xs text-adaka-muted">
-            {formatDuration(effectiveResponse.timing.total_ms)}
-          </span>
-          <span className="text-xs text-adaka-muted">
-            {formatBytes(effectiveResponse.body_size)}
-          </span>
-        </div>
+        <StatusChip
+          status={effectiveResponse.status}
+          statusText={effectiveResponse.status_text}
+          totalMs={effectiveResponse.timing.total_ms}
+          bodySize={effectiveResponse.body_size}
+        />
       )}
 
       {/* Tabs — always visible */}
@@ -131,6 +130,8 @@ export function ResponsePane() {
                 contentType={effectiveResponse.headers["content-type"] || ""}
                 pretty={prettyBody}
                 onTogglePretty={() => setPrettyBody(!prettyBody)}
+                viewMode={bodyViewMode}
+                onViewModeChange={setBodyViewMode}
               />
             )}
             {responseTab === "headers" && (
@@ -161,6 +162,64 @@ export function ResponsePane() {
             </p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function statusChipColor(status: number): string {
+  if (status >= 200 && status < 300) return "bg-emerald-900/40 border-emerald-700/50 text-emerald-300";
+  if (status >= 300 && status < 400) return "bg-blue-900/40 border-blue-700/50 text-blue-300";
+  if (status >= 400 && status < 500) return "bg-amber-900/40 border-amber-700/50 text-amber-300";
+  return "bg-red-900/40 border-red-700/50 text-red-300";
+}
+
+function statusDescription(status: number): string {
+  const descriptions: Record<number, string> = {
+    200: "OK — the request succeeded",
+    201: "Created — a new resource was made",
+    204: "No Content — success, nothing to return",
+    301: "Moved Permanently — use the new URL from now on",
+    302: "Found — temporarily at a different URL",
+    304: "Not Modified — use your cached copy",
+    400: "Bad Request — the server couldn't understand the request",
+    401: "Unauthorized — authentication is required",
+    403: "Forbidden — you don't have permission",
+    404: "Not Found — this resource doesn't exist",
+    405: "Method Not Allowed — try a different HTTP method",
+    408: "Request Timeout — the server gave up waiting",
+    409: "Conflict — the request conflicts with current state",
+    422: "Unprocessable — the data was understood but invalid",
+    429: "Too Many Requests — slow down, rate limited",
+    500: "Internal Server Error — something broke on their end",
+    502: "Bad Gateway — upstream server sent an invalid response",
+    503: "Service Unavailable — the server is overloaded or down",
+    504: "Gateway Timeout — upstream server didn't respond in time",
+  };
+  return descriptions[status] || "";
+}
+
+function StatusChip({ status, statusText, totalMs, bodySize }: {
+  status: number;
+  statusText: string;
+  totalMs: number;
+  bodySize: number;
+}) {
+  const description = statusDescription(status);
+  return (
+    <div className="flex items-center gap-3 border-b border-adaka-border px-3 py-2">
+      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-sm font-bold ${statusChipColor(status)}`}>
+        {status}
+      </span>
+      <div className="flex flex-col">
+        <span className="text-xs text-adaka-text">{statusText}</span>
+        {description && (
+          <span className="text-[11px] text-adaka-muted">{description}</span>
+        )}
+      </div>
+      <div className="ml-auto flex items-center gap-3">
+        <span className="text-xs text-adaka-muted">{formatDuration(totalMs)}</span>
+        <span className="text-xs text-adaka-muted">{formatBytes(bodySize)}</span>
       </div>
     </div>
   );
@@ -237,6 +296,8 @@ function ResponseBody({
   contentType,
   pretty,
   onTogglePretty,
+  viewMode,
+  onViewModeChange,
 }: {
   body: string;
   binary: boolean;
@@ -244,7 +305,35 @@ function ResponseBody({
   contentType: string;
   pretty: boolean;
   onTogglePretty: () => void;
+  viewMode: "tree" | "raw" | "preview";
+  onViewModeChange: (mode: "tree" | "raw" | "preview") => void;
 }) {
+  const isJson = contentType.includes("json");
+  const isHtml = contentType.includes("html");
+  const isImage = contentType.startsWith("image/");
+
+  const parsedJson = useMemo(() => {
+    if (!isJson) return null;
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      return null;
+    }
+  }, [body, isJson]);
+
+  if (binary && isImage) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-auto p-6">
+        <img
+          src={`data:${contentType};base64,${body}`}
+          alt="Response image"
+          className="max-h-[80%] max-w-full rounded border border-adaka-border object-contain"
+        />
+        <p className="text-xs text-adaka-faint">{contentType}</p>
+      </div>
+    );
+  }
+
   if (binary) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 p-6">
@@ -258,18 +347,15 @@ function ResponseBody({
     );
   }
 
-  let displayBody = body;
-  const isJson = contentType.includes("json");
-  if (isJson && pretty) {
-    try {
-      displayBody = JSON.stringify(JSON.parse(body), null, 2);
-    } catch {
-      // Not valid JSON despite content-type — show raw
-    }
-  }
+  const showTabs = isJson || isHtml;
+  const effectiveMode = isJson && parsedJson !== null && viewMode === "tree"
+    ? "tree"
+    : isHtml && viewMode === "preview"
+      ? "preview"
+      : "raw";
 
   return (
-    <div className="flex flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {truncated && (
         <div className="border-b border-amber-800/50 bg-amber-950/30 px-3 py-1.5">
           <p className="text-xs text-amber-400">
@@ -277,20 +363,87 @@ function ResponseBody({
           </p>
         </div>
       )}
-      {isJson && (
-        <div className="flex border-b border-adaka-border px-3 py-1">
+      {showTabs && (
+        <div className="flex items-center gap-1 border-b border-adaka-border px-3 py-1">
+          {isJson && parsedJson !== null && (
+            <button
+              className={`rounded px-2 py-0.5 text-[11px] ${effectiveMode === "tree" ? "bg-adaka-border-strong text-adaka-text" : "text-adaka-muted hover:text-adaka-text"}`}
+              onClick={() => onViewModeChange("tree")}
+            >
+              Tree
+            </button>
+          )}
           <button
-            className={`text-xs ${pretty ? "text-adaka-gold" : "text-adaka-muted hover:text-adaka-text"}`}
-            onClick={onTogglePretty}
+            className={`rounded px-2 py-0.5 text-[11px] ${effectiveMode === "raw" ? "bg-adaka-border-strong text-adaka-text" : "text-adaka-muted hover:text-adaka-text"}`}
+            onClick={() => onViewModeChange("raw")}
           >
-            {pretty ? "Pretty" : "Raw"}
+            Raw
           </button>
+          {isHtml && (
+            <button
+              className={`rounded px-2 py-0.5 text-[11px] ${effectiveMode === "preview" ? "bg-adaka-border-strong text-adaka-text" : "text-adaka-muted hover:text-adaka-text"}`}
+              onClick={() => onViewModeChange("preview")}
+            >
+              Preview
+            </button>
+          )}
+          {effectiveMode === "raw" && isJson && (
+            <button
+              className={`ml-auto text-[11px] ${pretty ? "text-adaka-gold" : "text-adaka-muted hover:text-adaka-text"}`}
+              onClick={onTogglePretty}
+            >
+              {pretty ? "Pretty" : "Compact"}
+            </button>
+          )}
         </div>
       )}
-      <pre className="flex-1 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs text-adaka-text">
-        {displayBody}
-      </pre>
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        {effectiveMode === "tree" && parsedJson !== null && (
+          <JsonTreeView data={parsedJson as Parameters<typeof JsonTreeView>[0]["data"]} />
+        )}
+        {effectiveMode === "preview" && isHtml && (
+          <HtmlPreview html={body} />
+        )}
+        {effectiveMode === "raw" && (
+          <RawBody body={body} isJson={showTabs && isJson} pretty={pretty} />
+        )}
+      </div>
     </div>
+  );
+}
+
+function RawBody({ body, isJson, pretty }: { body: string; isJson: boolean; pretty: boolean }) {
+  let displayBody = body;
+  if (isJson && pretty) {
+    try {
+      displayBody = JSON.stringify(JSON.parse(body), null, 2);
+    } catch {
+      // show raw
+    }
+  }
+  return (
+    <pre className="flex-1 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs text-adaka-text">
+      {displayBody}
+    </pre>
+  );
+}
+
+function HtmlPreview({ html }: { html: string }) {
+  const srcDoc = useMemo(() => {
+    const sanitized = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/on\w+="[^"]*"/gi, "")
+      .replace(/on\w+='[^']*'/gi, "");
+    return sanitized;
+  }, [html]);
+
+  return (
+    <iframe
+      srcDoc={srcDoc}
+      sandbox="allow-same-origin"
+      className="flex-1 border-none bg-white"
+      title="HTML response preview"
+    />
   );
 }
 

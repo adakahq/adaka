@@ -145,7 +145,7 @@ export function CollectionTree({ onSelect, onTreeChanged, onImport, onCopyAsCurl
               await deleteTreeRecursive(node);
             }
             onTreeChanged();
-            ctx.ui.toast(`Deleted '${node.name}'`);
+            ctx.ui.toast(`Deleted '${node.name}'`, "success");
           } catch (e) {
             ctx.ui.toast(`Delete failed: ${formatError(e)}`, "error");
           }

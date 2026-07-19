@@ -1,9 +1,11 @@
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { openWorkspace, createWorkspace, quickCreateWorkspace, getDefaultWorkspaceDir } from "./workspace-actions";
 import { getRecents, removeRecent, type RecentWorkspace } from "../shared/recents";
 import { formatKey } from "../shared/shortcuts";
 import { useGlobalStore } from "./global-store";
 import { useWorkspaceTabsStore } from "./workspace-tabs-store";
+import { Tooltip } from "../shared/Tooltip";
 
 const UNSAFE_CHARS = /[/\\:*?"<>|]/;
 
@@ -216,15 +218,16 @@ export function WelcomeScreen({ tabId }: { tabId: string }) {
                           {r.path}
                         </p>
                       </div>
-                      <span
-                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-border-strong hover:text-adaka-text group-hover:flex"
-                        role="button"
-                        tabIndex={-1}
-                        onClick={(e) => void handleRemove(e, r.path)}
-                        title="Remove from recents"
-                      >
-                        &times;
-                      </span>
+                      <Tooltip content="Remove from recents">
+                        <span
+                          className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-border-strong hover:text-adaka-text group-hover:flex"
+                          role="button"
+                          tabIndex={-1}
+                          onClick={(e) => void handleRemove(e, r.path)}
+                        >
+                          &times;
+                        </span>
+                      </Tooltip>
                     </button>
                   ))}
                 </div>

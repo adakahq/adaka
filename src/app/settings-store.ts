@@ -1,16 +1,20 @@
 import { create } from "zustand";
 import { getPref, setPref } from "../shared/prefs";
 
+export type SplitLayout = "stacked" | "side-by-side";
+
 export interface SettingsState {
   loaded: boolean;
   defaultWorkspaceFolder: string;
   reopenLastSession: boolean;
   railCollapsedDefault: boolean;
+  splitLayout: SplitLayout;
 
   load: () => Promise<void>;
   setDefaultWorkspaceFolder: (path: string) => Promise<void>;
   setReopenLastSession: (value: boolean) => Promise<void>;
   setRailCollapsedDefault: (value: boolean) => Promise<void>;
+  setSplitLayout: (layout: SplitLayout) => Promise<void>;
 }
 
 /** Global (not per-workspace) app preferences, backed 1:1 by prefs.json keys
@@ -21,17 +25,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   defaultWorkspaceFolder: "",
   reopenLastSession: true,
   railCollapsedDefault: false,
+  splitLayout: "stacked",
 
   load: async () => {
-    const [folder, reopen, railCollapsed] = await Promise.all([
+    const [folder, reopen, railCollapsed, splitLayout] = await Promise.all([
       getPref<string>("defaultWorkspaceFolder"),
       getPref<boolean>("reopenLastSession"),
       getPref<boolean>("railCollapsed"),
+      getPref<string>("splitLayout"),
     ]);
     set({
       defaultWorkspaceFolder: folder ?? "",
       reopenLastSession: reopen ?? true,
       railCollapsedDefault: railCollapsed ?? false,
+      splitLayout: (splitLayout as SplitLayout) || "stacked",
       loaded: true,
     });
   },
@@ -49,5 +56,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setRailCollapsedDefault: async (value) => {
     set({ railCollapsedDefault: value });
     await setPref("railCollapsed", value);
+  },
+
+  setSplitLayout: async (layout) => {
+    set({ splitLayout: layout });
+    await setPref("splitLayout", layout);
   },
 }));

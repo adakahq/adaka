@@ -1,5 +1,6 @@
 import { useWorkspaceTabsStore, isOpenWorkspaceTab } from "./workspace-tabs-store";
 import { closeWorkspaceTab } from "./workspace-actions";
+import { Tooltip } from "../shared/Tooltip";
 
 export function WorkspaceTabStrip() {
   const tabs = useWorkspaceTabsStore((s) => s.tabs);
@@ -27,29 +28,31 @@ export function WorkspaceTabStrip() {
               title={isOpenWorkspaceTab(tab) ? tab.workspace.root : "Pick or create a workspace"}
             >
               <span className="truncate">{label}</span>
-              <span
-                className="hidden h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-adaka-border-strong group-hover:flex"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeWorkspaceTab(tab.id);
-                }}
-                role="button"
-                tabIndex={-1}
-                title="Close"
-              >
-                &times;
-              </span>
+              <Tooltip content="Close">
+                <span
+                  className="hidden h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-adaka-border-strong group-hover:flex"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeWorkspaceTab(tab.id);
+                  }}
+                  role="button"
+                  tabIndex={-1}
+                >
+                  &times;
+                </span>
+              </Tooltip>
             </button>
           );
         })}
       </div>
-      <button
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-chrome hover:text-adaka-text"
-        onClick={() => addWelcomeTab()}
-        title="Open workspace in a new tab (Ctrl+T)"
-      >
-        +
-      </button>
+      <Tooltip content="Open workspace in a new tab (Ctrl+T)">
+        <button
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-adaka-faint hover:bg-adaka-chrome hover:text-adaka-text"
+          onClick={() => addWelcomeTab()}
+        >
+          +
+        </button>
+      </Tooltip>
     </div>
   );
 }

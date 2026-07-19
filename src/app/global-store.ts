@@ -47,7 +47,7 @@ interface GlobalState {
   setShowQuickCreate: (show: boolean) => void;
 }
 
-export const useGlobalStore = create<GlobalState>((set, get) => ({
+export const useGlobalStore = create<GlobalState>((set) => ({
   theme: "dark",
   paletteOpen: false,
   shortcutsOpen: false,
@@ -62,7 +62,6 @@ export const useGlobalStore = create<GlobalState>((set, get) => ({
   addToast: (msg, kind = "info") => {
     const id = ++toastSeq;
     set((s) => ({ toasts: [...s.toasts, { id, msg, kind }] }));
-    setTimeout(() => get().removeToast(id), 4000);
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 

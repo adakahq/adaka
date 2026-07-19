@@ -44,7 +44,7 @@ export interface ModuleToggles {
   logs: boolean;
 }
 
-export type ToastKind = "info" | "error";
+export type ToastKind = "info" | "success" | "error";
 
 export interface ConfirmOptions {
   title: string;

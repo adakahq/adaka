@@ -1,5 +1,6 @@
 import { getModules, ModuleContextProvider } from "../shared/module-sdk";
 import { useShellStore } from "./store";
+import { Tooltip } from "../shared/Tooltip";
 
 export function ContextPanel() {
   const activeTabId = useShellStore((s) => s.activeTabId);
@@ -29,16 +30,16 @@ export function ContextPanel() {
         {panel.headerActions && panel.headerActions.length > 0 && (
           <div className="flex items-center gap-0.5">
             {panel.headerActions.map((action) => (
-              <button
-                key={action.id}
-                className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
-                title={action.label}
-                onClick={() => ctx && action.action(ctx)}
-              >
-                {action.icon ?? (
-                  <span className="text-xs">{action.label}</span>
-                )}
-              </button>
+              <Tooltip key={action.id} content={action.label}>
+                <button
+                  className="rounded p-0.5 text-adaka-muted hover:bg-adaka-border hover:text-adaka-text"
+                  onClick={() => ctx && action.action(ctx)}
+                >
+                  {action.icon ?? (
+                    <span className="text-xs">{action.label}</span>
+                  )}
+                </button>
+              </Tooltip>
             ))}
           </div>
         )}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useShortcut } from "../shared/useShortcut";
 import { useGlobalStore, type Theme } from "./global-store";
+import { useShellStore } from "./store";
 import { useWorkspaceTabsStore, type WorkspaceTab } from "./workspace-tabs-store";
 import { hydrateWorkspaceTabs, openSettingsTab } from "./workspace-actions";
 import { WorkspaceTabProvider } from "./workspace-tab-context";
@@ -77,6 +78,19 @@ function KeyboardShortcuts() {
   return null;
 }
 
+function TabCycleShortcuts() {
+  const cycleTab = useShellStore((s) => s.cycleTab);
+  useShortcut("next-tab", (e) => {
+    e.preventDefault();
+    cycleTab(1);
+  });
+  useShortcut("prev-tab", (e) => {
+    e.preventDefault();
+    cycleTab(-1);
+  });
+  return null;
+}
+
 function WorkspaceTabContent({ tab }: { tab: WorkspaceTab }) {
   if (tab.kind === "welcome") {
     return <WelcomeScreen tabId={tab.id} />;
@@ -93,6 +107,7 @@ function WorkspaceTabContent({ tab }: { tab: WorkspaceTab }) {
         </div>
       </div>
       <StatusBar />
+      <TabCycleShortcuts />
     </div>
   );
 }
